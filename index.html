@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laboratory Chaos</title>
+
+    <!-- Importa o arquivo de estilos da página. -->
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Importa o JavaScript após o carregamento do HTML. -->
+    <script src="script.js" defer></script>
+</head>
+<body>
+    <!-- Painel decorativo que representa o laboratório. -->
+    <div class="lab-background" aria-hidden="true">
+        <span class="pixel-dot dot-one"></span>
+        <span class="pixel-dot dot-two"></span>
+        <span class="pixel-dot dot-three"></span>
+    </div>
+
+    <!-- TELA 1: menu principal. -->
+    <main class="screen active" id="menu-screen">
+        <section class="game-window menu-window">
+            <div class="title-area">
+                <span class="eyebrow">LAB 2.0</span>
+                <h1>Laboratory <span>Chaos</span></h1>
+                <p class="subtitle">Experimentos • Mistérios • Diversão</p>
+            </div>
+
+            <nav class="menu-buttons" aria-label="Menu principal">
+                <button class="menu-button primary" data-screen="play-screen">
+                    <span class="button-icon">▶</span>
+                    JOGAR
+                </button>
+                <button class="menu-button" data-screen="how-screen">
+                    <span class="button-icon">?</span>
+                    COMO JOGAR
+                </button>
+                <button class="menu-button" data-screen="settings-screen">
+                    <span class="button-icon">⚙</span>
+                    CONFIGURAÇÕES
+                </button>
+                <button class="menu-button" data-screen="credits-screen">
+                    <span class="button-icon">★</span>
+                    CRÉDITOS
+                </button>
+                <button class="menu-button" data-screen="rooms-screen">
+                    <span class="button-icon">▦</span>
+                    SALAS
+                </button>
+            </nav>
+        </section>
+    </main>
+
+    <!-- TELA 2: área de teste dos personagens e movimentação. -->
+    <main class="screen" id="play-screen">
+        <section class="game-window content-window play-window">
+            <h2>TELA DE TESTE</h2>
+
+            <div class="test-toolbar">
+                <label for="character-select">
+                    Personagem
+                    <select id="character-select">
+                        <option value="0">Azul</option>
+                        <option value="1">Rosa</option>
+                        <option value="2">Roxo</option>
+                        <option value="3">Amarelo</option>
+                        <option value="4">Cinza</option>
+                    </select>
+                </label>
+
+                <label for="speed-control">
+                    Velocidade
+                    <input id="speed-control" type="range" min="80" max="260" value="160">
+                </label>
+            </div>
+
+            <canvas id="game-canvas" width="800" height="480" aria-label="Mapa top-down do laboratório"></canvas>
+
+            <div class="match-hud">
+                <div>
+                    <span class="hud-label">JOGADOR</span>
+                    <strong id="player-name">Estudante Azul</strong>
+                </div>
+                <div class="match-clock" id="match-clock">05:00</div>
+                <div>
+                    <span class="hud-label">ADVERSÁRIOS ATIVOS</span>
+                    <strong id="active-players">3</strong>
+                </div>
+            </div>
+
+            <div class="opponents-panel" id="opponents-panel"></div>
+
+            <div class="keyboard-help">
+                <span>W A S D</span>
+                <span>ou</span>
+                <span>SETAS</span>
+            </div>
+
+            <div class="event-panel" id="event-panel" role="status" aria-live="polite">
+                <strong id="event-name">SISTEMA NORMAL</strong>
+                <span id="event-message">Nenhum evento ativo.</span>
+                <span id="event-time"></span>
+            </div>
+
+            <button class="back-button event-test-button" id="test-event-button" type="button">
+                TESTAR EVENTO ALEATÓRIO
+            </button>
+
+            <div class="task-progress" id="task-progress">
+                <strong>TAREFAS <span id="tasks-completed">0/6</span></strong>
+                <div id="task-list"></div>
+            </div>
+
+            <div class="task-modal" id="task-modal" hidden>
+                <section class="task-modal-window">
+                    <header>
+                        <span id="task-category">TAREFA</span>
+                        <h3 id="task-title">Título da tarefa</h3>
+                    </header>
+                    <p id="task-instructions"></p>
+                    <div id="task-content"></div>
+                    <div class="task-modal-footer">
+                        <span id="task-feedback" role="status"></span>
+                        <button class="back-button" id="task-close" type="button">FECHAR</button>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Telas de estado da partida. -->
+            <div class="match-overlay" id="pause-overlay" hidden>
+                <section class="match-overlay-window">
+                    <h2>JOGO PAUSADO</h2>
+                    <p>O cronômetro e os eventos estão suspensos.</p>
+                    <div class="overlay-actions">
+                        <button class="back-button" id="resume-button" type="button">CONTINUAR</button>
+                        <button class="back-button" id="pause-menu-button" type="button">VOLTAR AO MENU</button>
+                    </div>
+                </section>
+            </div>
+
+            <div class="match-overlay" id="result-overlay" hidden>
+                <section class="match-overlay-window">
+                    <h2 id="result-title">RESULTADO</h2>
+                    <p id="result-message"></p>
+                    <div class="overlay-actions">
+                        <button class="back-button" id="restart-button" type="button">JOGAR NOVAMENTE</button>
+                        <button class="back-button" id="result-menu-button" type="button">VOLTAR AO MENU</button>
+                    </div>
+                </section>
+            </div>
+
+            <button class="back-button" id="pause-button" type="button">Ⅱ PAUSAR</button>
+            <button class="back-button" data-screen="menu-screen">← VOLTAR AO MENU</button>
+        </section>
+    </main>
+
+    <!-- TELA 3: explicação do objetivo do jogo. -->
+    <main class="screen" id="how-screen">
+        <section class="game-window content-window">
+            <h2>COMO JOGAR</h2>
+            <div class="content-card how-to-card">
+                <h3>Objetivo</h3>
+                <p>Explore o laboratório, encontre os equipamentos perdidos e evite os experimentos que saíram do controle.</p>
+                <div class="tip">
+                    <span>◆</span>
+                    Complete cada missão sem deixar o caos aumentar!
+                </div>
+            </div>
+            <button class="back-button" data-screen="menu-screen">← VOLTAR AO MENU</button>
+        </section>
+    </main>
+
+    <!-- TELA 4: controles provisórios de configurações. -->
+    <main class="screen" id="settings-screen">
+        <section class="game-window content-window">
+            <h2>CONFIGURAÇÕES</h2>
+            <div class="content-card settings-card">
+                <label for="volume">
+                    <span>Volume geral</span>
+                    <strong id="volume-value">50%</strong>
+                </label>
+                <input id="volume" type="range" min="0" max="100" value="50">
+
+                <label class="toggle-row" for="effects">
+                    <span>Efeitos sonoros</span>
+                    <input id="effects" type="checkbox" checked>
+                </label>
+            </div>
+            <button class="back-button" data-screen="menu-screen">← VOLTAR AO MENU</button>
+        </section>
+    </main>
+
+    <!-- TELA 5: créditos do projeto. -->
+    <main class="screen" id="credits-screen">
+        <section class="game-window content-window">
+            <h2>CRÉDITOS</h2>
+            <div class="content-card credits-card">
+                <p class="credit-title">Laboratory Chaos</p>
+                <p>Projeto desenvolvido em HTML, CSS e JavaScript puro.</p>
+                <p>Direção visual inspirada em jogos 2D pixel art.</p>
+            </div>
+            <button class="back-button" data-screen="menu-screen">← VOLTAR AO MENU</button>
+        </section>
+    </main>
+
+    <!-- TELA DE SALAS: simulação local apenas. -->
+    <main class="screen" id="rooms-screen">
+        <section class="game-window content-window rooms-window">
+            <h2>SALAS</h2>
+            <p class="local-warning">SIMULAÇÃO LOCAL — não representa conexão com outros jogadores reais.</p>
+
+            <div class="room-actions">
+                <button class="room-action" id="create-public-room" type="button"><span>+</span>Criar sala pública</button>
+                <button class="room-action" id="create-private-room" type="button"><span>◆</span>Criar sala privada</button>
+            </div>
+
+            <section class="join-panel">
+                <h3>Entrar com código</h3>
+                <div class="join-row">
+                    <input id="room-code-input" type="text" maxlength="6" placeholder="EX.: LAB123" aria-label="Código da sala">
+                    <button class="back-button" id="join-room-button" type="button">ENTRAR</button>
+                </div>
+                <p id="room-feedback" role="status"></p>
+            </section>
+
+            <section class="public-rooms">
+                <h3>Salas públicas</h3>
+                <div id="public-room-list"></div>
+            </section>
+
+            <div class="room-lobby" id="room-lobby" hidden>
+                <div class="lobby-header">
+                    <div><span class="hud-label">SALA LOCAL</span><h3 id="lobby-room-name">Laboratório</h3></div>
+                    <div class="lobby-code"><span>CÓDIGO</span><strong id="lobby-room-code">LAB000</strong></div>
+                </div>
+                <p id="lobby-room-type"></p>
+                <div class="lobby-players" id="lobby-player-list"></div>
+                <div class="lobby-actions">
+                    <button class="back-button" id="leave-room-button" type="button">SAIR DA SALA</button>
+                    <button class="back-button" id="start-local-match" type="button">INICIAR TESTE</button>
+                </div>
+            </div>
+
+            <button class="back-button" data-screen="menu-screen">← VOLTAR AO MENU</button>
+        </section>
+    </main>
+</body>
+</html>
