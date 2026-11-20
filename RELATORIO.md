@@ -5,8 +5,8 @@ Revisão completa do projeto feita em 20/11/2026, a partir do `CLAUDE.md` e do `
 **Como foi verificado**
 
 - `node --check` em `script.js`, `config.js`, `server/index.js` e `server/scripts/teste-multiplayer.js`: sem erros.
-- `cd server && npm test`: **37 aprovados, 0 com falha** (antes e depois das correções).
-- `URL_TESTE=https://laboratory-chaos.onrender.com npm test`: **38 aprovados, 0 com falha** (servidor online). O Render responde com CORS liberado para `https://professoralissonlucas.github.io`.
+- `cd server` e `npm test`: **37 aprovados, 0 com falha** (antes e depois das correções). O total pode ser 38: há uma verificação extra quando o evento sorteado no teste é "portas travadas".
+- `URL_TESTE=https://laboratory-chaos.onrender.com npm test` (no PowerShell: `$env:URL_TESTE="https://laboratory-chaos.onrender.com"; npm test`): **todos aprovados, 0 com falha** (37 ou 38, conforme o evento sorteado), testado no bash e no Windows PowerShell. O Render responde com CORS liberado para `https://professoralissonlucas.github.io`.
 - Teste no navegador (Chrome headless): modo solo abrindo o `index.html` direto e uma partida multiplayer com 3 abas no servidor local. **34 verificações, todas aprovadas, nenhum erro de JavaScript.**
 - Capturas de tela de todas as telas em **360px, 700px e 1280px**, medindo se algo passa da largura da tela.
 - Uma busca (BFS) com o mapa real calculou todas as posições onde o personagem consegue ficar e conferiu se cada tarefa e cada coletável pode ser acionado com **E**.
@@ -155,12 +155,25 @@ Para desenvolver com o **Live Server** do VS Code, deixe o `npm start` rodando: 
 - Servidor: Render, com *Root Directory* `server`, build `npm install` e start `npm start`. A URL fica em `URL_SERVIDOR_ONLINE` no `config.js`.
 - Se o Render estiver "dormindo", espere até ~1 minuto na tela SALAS: ele conecta sozinho.
 
+Os comandos acima (`cd server`, `npm install`, `npm start`) são iguais no bash e no Windows PowerShell, desde que cada um vá numa linha. No Windows PowerShell 5.1 não dá para juntar comandos com `&&`; use `;` (ex.: `cd server; npm start`).
+
 ### Testes automáticos
+Teste local (sobe um servidor temporário e simula de 3 a 6 jogadores), igual nos dois terminais:
 ```bash
 cd server
-npm test                                                   # sobe um servidor temporário e simula 3 a 6 jogadores
-URL_TESTE=https://laboratory-chaos.onrender.com npm test   # testa o servidor online
+npm test
 ```
+
+Teste do servidor online, no **bash** (Git Bash, Linux, macOS):
+```bash
+URL_TESTE=https://laboratory-chaos.onrender.com npm test
+```
+
+e no **Windows PowerShell**:
+```powershell
+$env:URL_TESTE="https://laboratory-chaos.onrender.com"; npm test
+```
+No PowerShell, a variável continua valendo até fechar o terminal. Para voltar ao teste local, rode `Remove-Item Env:URL_TESTE`.
 
 ---
 

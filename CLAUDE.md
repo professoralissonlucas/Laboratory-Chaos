@@ -11,7 +11,7 @@ Há dois modos:
 - **Multiplayer** (tela SALAS): servidor **Node.js + Express + Socket.IO**, sem banco de dados (tudo em memória). Salas públicas/privadas, 3 a 5 jogadores, servidor autoritativo (cronômetro, eventos, validação de tarefas, resultado).
 
 - Idioma da interface e do código: português (pt-BR).
-- Sem build. Testes automáticos do multiplayer: `cd server && npm test` (sobe o servidor numa porta livre e simula de 3 a 6 jogadores com `socket.io-client`; `URL_TESTE=<url> npm test` testa um servidor já rodando). Rode-os depois de qualquer mudança no `server/index.js` ou nos eventos Socket.IO.
+- Sem build. Testes automáticos do multiplayer: `cd server && npm test` (sobe o servidor numa porta livre e simula de 3 a 6 jogadores com `socket.io-client`; `URL_TESTE=<url> npm test` testa um servidor já rodando; no Windows PowerShell: `$env:URL_TESTE="<url>"; npm test`). No Windows PowerShell 5.1 não existe `&&`: use `;` ou uma linha por comando. Rode-os depois de qualquer mudança no `server/index.js` ou nos eventos Socket.IO.
 
 ## Publicação e execução
 
@@ -36,7 +36,9 @@ rafisa/                  # raiz = o que o GitHub Pages publica
 │   ├── index.js         # Socket.IO + regras das salas/partida (+ arquivos estáticos no modo local)
 │   └── scripts/
 │       └── teste-multiplayer.js  # Teste automático (npm test)
+├── README.md            # Apresentação curta (jogar, controles, rodar, testar, créditos)
 ├── SPEC.md              # Especificação do estado atual e limitações conhecidas
+├── RELATORIO.md         # Relatório de revisão: o que funciona, correções, testes, pendências
 ├── CLAUDE.md            # Este arquivo
 └── .gitignore           # ignora node_modules/ (em qualquer pasta)
 ```
