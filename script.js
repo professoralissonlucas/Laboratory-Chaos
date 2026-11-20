@@ -51,8 +51,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // Faz os botões do menu e os botões "Voltar" funcionarem.
     botoesDeTela.forEach((botao) => {
         botao.addEventListener("click", () => {
-            // Voltar ao menu estando numa sala (lobby ou partida em rede) também sai dela.
-            if (botao.dataset.screen === "menu-screen" && rede.sala) salasRede.sair();
+            // Voltar ao menu: deixa a partida (e a sala, se estiver numa).
+            if (botao.dataset.screen === "menu-screen") sairDaPartida();
 
             abrirTela(botao.dataset.screen);
 
@@ -127,6 +127,9 @@ document.addEventListener("DOMContentLoaded", () => {
             (alvo.tagName === "INPUT" && alvo.type === "text");
         if (digitando) return;
 
+        // Fora da partida as setas voltam a controlar sliders, listas e a rolagem.
+        if (!telaDeJogoAtiva()) return;
+
         const tecla = evento.key.toLowerCase();
         const teclasMovimento = ["w", "a", "s", "d", "arrowup", "arrowleft", "arrowdown", "arrowright"];
 
@@ -135,7 +138,8 @@ document.addEventListener("DOMContentLoaded", () => {
             teclasPressionadas[tecla] = true;
         }
 
-        if (tecla === "e" && modalTarefa && modalTarefa.hidden && !partida.pausada) {
+        if (tecla === "e" && !evento.repeat && modalTarefa && modalTarefa.hidden &&
+            !partida.pausada && !partida.encerrada) {
             verificarInteracaoTarefa();
         }
     });
@@ -143,6 +147,20 @@ document.addEventListener("DOMContentLoaded", () => {
     window.addEventListener("keyup", (evento) => {
         teclasPressionadas[evento.key.toLowerCase()] = false;
     });
+
+    // Se a janela perde o foco, o keyup não chega: solta todas as teclas.
+    function soltarTeclas() {
+        Object.keys(teclasPressionadas).forEach((tecla) => {
+            teclasPressionadas[tecla] = false;
+        });
+    }
+    window.addEventListener("blur", soltarTeclas);
+
+    // A partida só recebe teclado com a tela de jogo aberta.
+    function telaDeJogoAtiva() {
+        const telaJogo = document.getElementById("play-screen");
+        return Boolean(telaJogo && telaJogo.classList.contains("active"));
+    }
 
     // Escolhe qual dos cinco personagens é desenhado e mostra o nome no HUD.
     function escolherPersonagem(indice) {
@@ -276,8 +294,17 @@ document.addEventListener("DOMContentLoaded", () => {
             horizontal /= tamanhoDiagonal;
             vertical /= tamanhoDiagonal;
 
+            // Se o gás ou uma porta travada apareceu em cima do jogador,
+            // ele pode andar para sair (só paredes e móveis bloqueiam).
+            const soFixos = checarColisao(false);
+
+            // Move um eixo de cada vez: na diagonal, o personagem desliza
+            // pela parede em vez de parar.
             personagem.x += horizontal * personagem.velocidade * deltaTempo;
+            if (checarColisao(soFixos)) personagem.x = personagem.posicaoAnteriorX;
+
             personagem.y += vertical * personagem.velocidade * deltaTempo;
+            if (checarColisao(soFixos)) personagem.y = personagem.posicaoAnteriorY;
 
             if (horizontal < 0) personagem.direcao = "esquerda";
             if (horizontal > 0) personagem.direcao = "direita";
@@ -388,8 +415,10 @@ document.addEventListener("DOMContentLoaded", () => {
         return { x: personagem.x + 10, y: personagem.y + 20, largura: 28, altura: 28 };
     }
 
-    // Confere colisão com paredes, obstáculos e portas fechadas.
-    function checarColisao() {
+    // Confere se a posição atual colide com paredes, obstáculos, portas
+    // fechadas ou a nuvem de gás. Devolve true se houver colisão.
+    // Com soFixos = true, só paredes e obstáculos contam.
+    function checarColisao(soFixos) {
         const caixa = caixaColisao();
 
         // Verifica se a caixa de colisão toca qualquer área sólida.
@@ -402,25 +431,34 @@ document.addEventListener("DOMContentLoaded", () => {
             );
         }
 
-        // Para verificar qualquer colisão no mapa.
-        const paredeColidida = paredes.some(estaSobreposto);
-        const obstaculoColidido = obstaculos.some(estaSobreposto);
+        // Paredes e obstáculos sempre bloqueiam.
+        if (paredes.some(estaSobreposto) || obstaculos.some(estaSobreposto)) return true;
+        if (soFixos) return false;
 
         // O gás ativo funciona como uma área temporariamente bloqueada.
-        const gasColidido = estadoEvento.ativo === "gas" &&
-            estadoEvento.gas && estaSobreposto(estadoEvento.gas);
+        const gasColidido = Boolean(estadoEvento.ativo === "gas" &&
+            estadoEvento.gas && estaSobreposto(estadoEvento.gas));
 
-        const portaFechada = portas.find((porta) => {
-            return !porta.aberta && estaSobreposto(porta);
-        });
+        const portaFechada = portas.some((porta) => !porta.aberta && estaSobreposto(porta));
 
-        // Se houver colisão, a posição anterior é recuperada.
-        if (paredeColidida || obstaculoColidido || gasColidido || portaFechada) {
-            personagem.x = personagem.posicaoAnteriorX;
-            personagem.y = personagem.posicaoAnteriorY;
-        }
+        return gasColidido || portaFechada;
+    }
 
-        return !paredeColidida && !obstaculoColidido && !gasColidido && !portaFechada;
+    // Retângulo interno de cada sala. Tarefas e coletáveis só podem ser
+    // usados de dentro da mesma sala (não dá para "atravessar" paredes).
+    const salasDoMapa = [
+        { nome: "Computadores", x: 32, y: 32, largura: 192, altura: 160 },
+        { nome: "Energia", x: 32, y: 304, largura: 192, altura: 144 },
+        { nome: "Principal", x: 288, y: 224, largura: 224, altura: 176 },
+        { nome: "Segurança", x: 576, y: 32, largura: 192, altura: 160 },
+        { nome: "Reator", x: 576, y: 288, largura: 192, altura: 160 }
+    ];
+
+    // Nome da sala onde está o ponto (ou null nos corredores).
+    function salaDoPonto(x, y) {
+        const sala = salasDoMapa.find((item) =>
+            x >= item.x && x < item.x + item.largura && y >= item.y && y < item.y + item.altura);
+        return sala ? sala.nome : null;
     }
 
     // Desenha o mapa completo do laboratório e seus objetos.
@@ -763,7 +801,8 @@ document.addEventListener("DOMContentLoaded", () => {
         agendamento.timer = window.setTimeout(() => {
             agendamento.timer = null;
             if (modoJogo === "solo" && document.getElementById("play-screen").classList.contains("active") && !partida.pausada) {
-                iniciarEvento(configuracaoEventos.duracaoPadrao);
+                // Sem duração fixa: cada evento usa a sua (igual ao servidor).
+                iniciarEvento();
             }
             agendarProximoEvento();
         }, intervalo);
@@ -813,14 +852,15 @@ document.addEventListener("DOMContentLoaded", () => {
         { id: "protocolo", nome: "Ativar o protocolo", categoria: "DIFÍCIL", concluida: false, progresso: 0, total: 3, x: 400, y: 288 }
     ];
 
+    // Coletáveis ficam afastados das marcas de tarefa para não se confundirem.
     const objetosColetaveis = {
         frascos: [
             { x: 96, y: 144, coletado: false },
             { x: 336, y: 360, coletado: false },
-            { x: 620, y: 112, coletado: false }
+            { x: 600, y: 160, coletado: false }
         ],
         cartoes: [
-            { x: 80, y: 336, coletado: false },
+            { x: 128, y: 420, coletado: false },
             { x: 720, y: 112, coletado: false },
             { x: 720, y: 384, coletado: false }
         ]
@@ -1084,7 +1124,11 @@ document.addEventListener("DOMContentLoaded", () => {
         barraProgresso(tarefa);
     }
 
+    // Tarefa mostrada no modal agora (para redesenhar se o servidor recusar).
+    let tarefaAberta = null;
+
     function abrirTarefa(tarefa) {
+        tarefaAberta = tarefa;
         modalTarefa.hidden = false;
         categoriaTarefa.textContent = `${tarefa.categoria} • ${tarefa.progresso}/${tarefa.total}`;
         tituloTarefa.textContent = tarefa.nome;
@@ -1115,54 +1159,49 @@ document.addEventListener("DOMContentLoaded", () => {
         const centroY = personagem.y + personagem.tamanho / 2;
         const raioTarefa = 100;
         const raioColeta = 70;
+        const salaDoJogador = salaDoPonto(centroX, centroY);
 
-        // Escolhe a tarefa mais próxima dentro do raio.
-        let tarefaEncontrada = null;
-        let menorDistancia = raioTarefa;
+        // Junta tarefas e coletáveis ao alcance; vence o mais próximo.
+        // (Antes as tarefas tinham prioridade e escondiam os coletáveis vizinhos.)
+        const candidatos = [];
 
-        for (const tarefa of tarefas) {
-            const distancia = Math.hypot(centroX - tarefa.x, centroY - tarefa.y);
-
-            if (distancia < menorDistancia) {
-                menorDistancia = distancia;
-                tarefaEncontrada = tarefa;
-            }
+        function considerar(alvo, raio, acao) {
+            if (salaDoPonto(alvo.x, alvo.y) !== salaDoJogador) return;
+            const distancia = Math.hypot(centroX - alvo.x, centroY - alvo.y);
+            if (distancia < raio) candidatos.push({ distancia, acao });
         }
 
-        if (tarefaEncontrada) {
-            abrirTarefa(tarefaEncontrada);
+        tarefas.forEach((tarefa) => {
+            considerar(tarefa, raioTarefa, () => abrirTarefa(tarefa));
+        });
+
+        objetosColetaveis.frascos.forEach((frasco, indice) => {
+            if (frasco.coletado) return;
+            considerar(frasco, raioColeta, () => {
+                frasco.coletado = true;
+                avisarColeta("frascos", indice);
+                const frascosColetados = objetosColetaveis.frascos.filter((item) => item.coletado).length;
+                mostrarAviso(`Frasco coletado (${frascosColetados}/3).`);
+            });
+        });
+
+        objetosColetaveis.cartoes.forEach((cartao, indice) => {
+            if (cartao.coletado) return;
+            considerar(cartao, raioColeta, () => {
+                cartao.coletado = true;
+                avisarColeta("cartoes", indice);
+                const encontrados = objetosColetaveis.cartoes.filter((item) => item.coletado).length;
+                mostrarAviso(`Cartão coletado (${encontrados}/3).`);
+            });
+        });
+
+        if (candidatos.length === 0) {
+            mostrarAviso("Aproxime-se de um objeto ou tarefa e pressione E.");
             return;
         }
 
-        // Frascos podem ser coletados aproximando-se deles.
-        for (const [indice, frasco] of objetosColetaveis.frascos.entries()) {
-            if (!frasco.coletado) {
-                const distancia = Math.hypot(centroX - frasco.x, centroY - frasco.y);
-                if (distancia < raioColeta) {
-                    frasco.coletado = true;
-                    avisarColeta("frascos", indice);
-                    const frascosColetados = objetosColetaveis.frascos.filter((item) => item.coletado).length;
-                    mostrarAviso(`Frasco coletado (${frascosColetados}/3).`);
-                    return;
-                }
-            }
-        }
-
-        // Cartões de acesso são coletados da mesma forma.
-        for (const [indice, cartao] of objetosColetaveis.cartoes.entries()) {
-            if (!cartao.coletado) {
-                const distancia = Math.hypot(centroX - cartao.x, centroY - cartao.y);
-                if (distancia < raioColeta) {
-                    cartao.coletado = true;
-                    avisarColeta("cartoes", indice);
-                    const encontrados = objetosColetaveis.cartoes.filter((item) => item.coletado).length;
-                    mostrarAviso(`Cartão coletado (${encontrados}/3).`);
-                    return;
-                }
-            }
-        }
-
-        mostrarAviso("Aproxime-se de um objeto ou tarefa e pressione E.");
+        candidatos.sort((a, b) => a.distancia - b.distancia);
+        candidatos[0].acao();
     }
 
     // =================================================================
@@ -1263,6 +1302,9 @@ document.addEventListener("DOMContentLoaded", () => {
         agendamento.timer = null;
 
         if (estadoEvento.ativo) finalizarEvento();
+        modalTarefa.hidden = true;
+        pauseOverlay.hidden = true;
+        soltarTeclas();
 
         document.getElementById("result-title").textContent = vitoria ? "VITÓRIA" : "DERROTA";
         document.getElementById("result-message").textContent = motivo;
@@ -1391,6 +1433,7 @@ document.addEventListener("DOMContentLoaded", () => {
             // Eventos vêm do servidor: cancela o agendamento local.
             window.clearTimeout(agendamento.timer);
             agendamento.timer = null;
+            agendamento.restanteNaPausa = null;
         } else {
             preencherAdversariosSimulados();
             escolherPersonagem(Number(seletorPersonagem ? seletorPersonagem.value : 0));
@@ -1434,6 +1477,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (partida.encerrada || partida.pausada) return;
         partida.pausada = true;
         pausarEventos();
+        soltarTeclas();
+        // Com o jogo pausado não dá para fazer tarefas (o relógio está parado).
+        modalTarefa.hidden = true;
         pauseOverlay.hidden = false;
     }
 
@@ -1459,37 +1505,61 @@ document.addEventListener("DOMContentLoaded", () => {
             partida.tempoRestante = Math.max(0, partida.tempoRestante);
             atualizarCronometro();
 
-            // Simulação abstrata: adversários avançam ou podem ser eliminados.
-            if (Math.random() < 0.12) {
-                const adversarioElegivel = adversarios.find((adversario) => adversario.ativo);
-                if (adversarioElegivel) {
-                    // Chegar a 6/6 é tratado em verificarResultado() como vitória do adversário.
-                    adversarioElegivel.progresso = Math.min(6, adversarioElegivel.progresso + 1);
-                }
-                atualizarPainelAdversarios();
+            // Simulação abstrata, sorteada uma vez por segundo passado
+            // (não depende da taxa de quadros do computador).
+            for (let segundo = 0; segundo < segundosPassados; segundo += 1) {
+                simularAdversarios();
             }
 
             verificarResultado();
         }
+    }
 
-        // Eliminação abstrata de um adversário em intervalos aleatórios.
-        if (partida.tempoRestante > 0 && Math.random() < 0.006) {
-            const ativo = adversarios.filter((adversario) => adversario.ativo);
-            if (ativo.length > 0) {
-                ativo[Math.floor(Math.random() * ativo.length)].ativo = false;
-                atualizarPainelAdversarios();
-            }
+    // Chances por segundo, ajustadas para o primeiro adversário chegar
+    // a 6/6 por volta de 3min20s (mediana; em ~1 de cada 4 partidas ninguém chega)
+    // e ~2 eliminações a cada 3 partidas.
+    const CHANCE_AVANCO_POR_SEGUNDO = 0.035;
+    const CHANCE_ELIMINACAO_POR_SEGUNDO = 0.003;
+
+    function simularAdversarios() {
+        const ativos = adversarios.filter((adversario) => adversario.ativo);
+        if (ativos.length === 0) return;
+        const sortear = () => ativos[Math.floor(Math.random() * ativos.length)];
+
+        // Um adversário sorteado conclui mais uma tarefa.
+        // Chegar a 6/6 é tratado em verificarResultado() como vitória do adversário.
+        if (Math.random() < CHANCE_AVANCO_POR_SEGUNDO) {
+            const adversario = sortear();
+            adversario.progresso = Math.min(6, adversario.progresso + 1);
+            atualizarPainelAdversarios();
         }
 
-        verificarResultado();
+        // Eliminação abstrata de um adversário sorteado.
+        if (Math.random() < CHANCE_ELIMINACAO_POR_SEGUNDO) {
+            sortear().ativo = false;
+            atualizarPainelAdversarios();
+        }
     }
 
     pauseButton.addEventListener("click", pausarPartida);
     botaoContinuar.addEventListener("click", continuarPartida);
 
-    document.getElementById("pause-menu-button").addEventListener("click", () => {
-        pauseOverlay.hidden = true;
+    // Volta ao menu no meio da partida: para o evento (e o bip do alarme),
+    // cancela o próximo sorteio e sai da sala, se estiver numa.
+    function sairDaPartida() {
         if (rede.sala) salasRede.sair();
+        finalizarEvento();
+        window.clearTimeout(agendamento.timer);
+        agendamento.timer = null;
+        agendamento.restanteNaPausa = null;
+        if (partida.iniciou) partida.encerrada = true;
+        modalTarefa.hidden = true;
+        pauseOverlay.hidden = true;
+        soltarTeclas();
+    }
+
+    document.getElementById("pause-menu-button").addEventListener("click", () => {
+        sairDaPartida();
         abrirTela("menu-screen");
     });
 
@@ -1505,7 +1575,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     document.getElementById("result-menu-button").addEventListener("click", () => {
         resultOverlay.hidden = true;
-        if (rede.sala) salasRede.sair();
+        sairDaPartida();
         abrirTela("menu-screen");
     });
 
@@ -1960,6 +2030,13 @@ document.addEventListener("DOMContentLoaded", () => {
         socket.on("tarefa:recusada", (dados) => {
             const tarefa = tarefas.find((item) => item.id === dados.tarefaId);
             if (tarefa && tarefa.concluida) return;
+
+            // O minijogo volta ao começo; senão todos os botões ficariam
+            // verdes e desativados e a tarefa nunca mais poderia ser feita.
+            if (tarefa) {
+                tarefa.progresso = 0;
+                if (!modalTarefa.hidden && tarefaAberta === tarefa) abrirTarefa(tarefa);
+            }
             feedbackTarefa.textContent = dados.motivo;
             mostrarAviso(dados.motivo);
         });
@@ -2002,9 +2079,8 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!partida.pausada) {
                 atualizarPartida();
                 atualizarEvento();
+                // A colisão é resolvida dentro do movimento, antes de desenhar.
                 atualizarPersonagem(Math.min(deltaTempo, 0.05));
-                // Resolve a colisão antes de desenhar, para não haver quadro sobreposto.
-                checarColisao();
                 enviarPosicao(tempoAtual);
             }
             atualizarOutrosJogadores(Math.min(deltaTempo, 0.05));

@@ -18,7 +18,7 @@ Há dois modos:
 - **Front-end**: GitHub Pages publica a **raiz** do repositório (https://professoralissonlucas.github.io/Laboratory-Chaos/). Por isso os arquivos do jogo ficam na raiz e **todos os caminhos são relativos** (nada começando com `/`).
 - **Servidor online**: Render, com *Root Directory* `server`, build `npm install`, start `npm start`. A URL vai em `URL_SERVIDOR_ONLINE` no `config.js`.
 - **Rede da escola (sem internet)**: `cd server`, `npm install`, `npm start`. O Express também serve o jogo da pasta raiz; o terminal mostra os endereços `http://IP:3000` para os colegas.
-- `config.js` escolhe o servidor: `*.github.io` → Render; `localhost`/IP → `location.origin`; `file://` → nenhum (só solo).
+- `config.js` escolhe o servidor: `*.github.io` → Render; porta 5500 (Live Server) → mesmo host na porta 3000; `localhost`/IP → `location.origin`; `file://` → nenhum (só solo).
 - O `script.js` carrega `${URL_SERVIDOR}/socket.io/socket.io.js` dinamicamente. Enquanto carrega, a tela Salas mostra "CONECTANDO AO SERVIDOR..."; se falhar ou passar de 15s, mostra "SERVIDOR OFFLINE" (o solo nunca depende disso).
 - Variáveis do servidor: `PORT` (padrão 3000) e `ORIGENS_PERMITIDAS` (CORS, separadas por vírgula; padrão: o github.io e `localhost`/`127.0.0.1` nas portas 3000 e 5500).
 
@@ -47,7 +47,7 @@ Seções do `script.js` (cada uma com comentário de cabeçalho):
 
 1. Navegação e configurações — `abrirTela(id)`, botões `data-screen`, volume/efeitos.
 2. Personagem — `personagem`, `posicaoDeSaida()`, `escolherPersonagem()`, `aplicarVelocidade()`, `desenharBoneco()` (qualquer jogador), `desenharNome()`, `atualizarPersonagem(delta)`.
-3. Mapa — `paredes`, `portas`, `obstaculos`, `caixaColisao()` (hitbox 28×28 nos pés), `checarColisao()`, `desenharFundo()`.
+3. Mapa — `paredes`, `portas`, `obstaculos`, `caixaColisao()` (hitbox 28×28 nos pés), `checarColisao(soFixos)` (true se colide; usada por eixo em `atualizarPersonagem`), `salasDoMapa`/`salaDoPonto()` (interação só na mesma sala), `desenharFundo()`.
 4. Eventos — `eventosAleatorios`, `iniciarEvento()` (sorteio solo), `aplicarEvento(id, duração, portas)`, `finalizarEvento()`, `agendarProximoEvento()`.
 5. Tarefas — `tarefas`, `objetosColetaveis`, `interface<Tarefa>()`, `concluirTarefa()` (rede: pede validação), `marcarTarefaConcluida()`.
 6. Partida — `modoJogo` ("solo" | "rede"), `iniciarPartida(modo, dados)`, `atualizarPartida()` (só solo), `verificarResultado()`, `pausarPartida()`/`congelarPartida()`.

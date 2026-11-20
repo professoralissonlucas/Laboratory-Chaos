@@ -682,6 +682,9 @@ h1 span {
     background: #1b2038;
     border: 4px solid #777f98;
 }
+/* Sem margem extra no topo: o título fica alinhado ao padding do painel. */
+.join-panel h3,
+.public-rooms h3 { margin-top: 0; }
 .join-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
 .join-row input {
     min-width: 0;
@@ -791,37 +794,19 @@ h1 span {
         grid-template-columns: 1fr;
     }
 
-    /* Overlays compactos para caber sobre o canvas pequeno. */
+    /* No celular o canvas é pequeno demais: pausa e resultado cobrem a tela
+       inteira (como o modal de tarefa), sem cortar a janela. */
     .match-overlay {
-        padding: 6px;
+        position: fixed;
+        padding: 16px;
     }
 
     .match-overlay-window {
-        padding: 10px;
-        border-width: 4px;
+        padding: 18px;
     }
 
     .match-overlay-window h2 {
-        margin-bottom: 6px;
-        padding-bottom: 4px;
-        border-bottom-width: 4px;
-        font-size: 18px;
-    }
-
-    .match-overlay-window p {
-        margin: 0;
-        font-size: 12px;
-        line-height: 1.3;
-    }
-
-    .overlay-actions {
-        gap: 6px;
-        margin-top: 8px;
-    }
-
-    .overlay-actions .back-button {
-        padding: 6px 8px;
-        font-size: 11px;
+        font-size: 24px;
     }
 
     .task-modal {

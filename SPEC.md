@@ -46,7 +46,7 @@ rafisa/                 # raiz = publicada pelo GitHub Pages
 - O `script.js` é carregado com `defer` e tudo roda dentro de um único `DOMContentLoaded` (sem ES modules, para funcionar via `file://`).
 
 ### Conexão com o servidor
-- `config.js` define `URL_SERVIDOR`: em `*.github.io` usa `URL_SERVIDOR_ONLINE`; em `localhost`/IP usa `location.origin`; em `file://` é `null`.
+- `config.js` define `URL_SERVIDOR`: em `*.github.io` usa `URL_SERVIDOR_ONLINE`; na porta 5500 (Live Server do VS Code) usa o mesmo host na porta 3000; em `localhost`/IP usa `location.origin`; em `file://` é `null`.
 - `conectarServidor()` cria um `<script>` com `${URL_SERVIDOR}/socket.io/socket.io.js`. Estados na tela Salas: "CONECTANDO AO SERVIDOR..." → "SERVIDOR ONLINE" ou, se falhar/passar de 15s, "SERVIDOR OFFLINE". Se o servidor responder depois (Render acordando), conecta sozinho.
 
 ---
@@ -58,7 +58,7 @@ Cada tela é um `<main class="screen">`; apenas a que tem a classe `active` é e
 | ID da tela | Nome | Conteúdo |
 |---|---|---|
 | `menu-screen` | Menu principal | Título e 5 botões: Jogar, Como Jogar, Configurações, Créditos, Salas |
-| `play-screen` | Partida | Seletor de personagem, slider de velocidade (com valor), canvas 800×480 dentro de `.canvas-frame`, HUD, painel de adversários, ajuda de teclado, painel de evento, botão "Testar evento aleatório", progresso de tarefas, modal de tarefa, botões Pausar e Voltar |
+| `play-screen` | Partida (título "PARTIDA") | Seletor de personagem, slider de velocidade (com valor), canvas 800×480 dentro de `.canvas-frame`, HUD, painel de adversários, ajuda de teclado, painel de evento, botão "Testar evento aleatório", progresso de tarefas, modal de tarefa, botões Pausar e Voltar |
 | `how-screen` | Como jogar | Objetivo, controles, tecla E, coletáveis, eventos e limite de 5 minutos |
 | `settings-screen` | Configurações | Volume (0–100%) e efeitos sonoros — ambos afetam o bip do alarme |
 | `credits-screen` | Créditos | Texto sobre o projeto |
@@ -66,7 +66,7 @@ Cada tela é um `<main class="screen">`; apenas a que tem a classe `active` é e
 
 Elementos sobrepostos (atributo `hidden`):
 - `#task-modal` — janela do minijogo (fixa na tela, centralizada, com rolagem).
-- `#pause-overlay` e `#result-overlay` — dentro de `.canvas-frame`, cobrem exatamente o canvas.
+- `#pause-overlay` e `#result-overlay` — dentro de `.canvas-frame`, cobrem exatamente o canvas (até 700px de largura cobrem a tela toda).
 
 ---
 
@@ -76,7 +76,7 @@ Elementos sobrepostos (atributo `hidden`):
 - Fonte única: `"Courier New", monospace`.
 - Estética pixel art: bordas pretas grossas (`#0b0d1b`), sombras sólidas deslocadas, `image-rendering: pixelated`, sem bordas arredondadas.
 - Canvas: resolução lógica 800×480, escalado só pelo CSS (`aspect-ratio: 5 / 3`).
-- **Responsivo**: breakpoint `@media (max-width: 700px)` — menos espaço interno, HUD em 2 colunas, painéis empilhados, overlays compactos. Testado em 360px sem nada cortado.
+- **Responsivo**: breakpoint `@media (max-width: 700px)` — menos espaço interno, HUD em 2 colunas, painéis empilhados; os overlays de pausa/resultado passam a cobrir a tela inteira (`position: fixed`), porque o canvas fica pequeno demais. Testado em 360, 700 e 1280px sem rolagem horizontal.
 - Botões desativados (`:disabled`) ficam com 50% de opacidade.
 
 ---
@@ -92,7 +92,7 @@ Seções: 1. Navegação e configurações · 2. Personagem · 3. Mapa · 4. Eve
 
 ### 5.2 Personagem
 - 5 personagens (Azul, Rosa, Roxo, Amarelo, Cinza), desenhados numa grade 16×16 escalada para 48px.
-- Movimento com **W A S D** ou **setas**; a diagonal é normalizada. As teclas são ignoradas enquanto se digita num campo de texto.
+- Movimento com **W A S D** ou **setas**; a diagonal é normalizada. As teclas só controlam o jogo com a `play-screen` ativa (nas outras telas as setas voltam a mexer em sliders e listas) e são ignoradas enquanto se digita num campo de texto. Se a janela perde o foco, todas as teclas são soltas.
 - Velocidade vem do slider (80–260). No multiplayer fica travada em 160.
 
 ### 5.3 Mapa e colisão
@@ -100,10 +100,12 @@ Canvas lógico de **800×480 px**. Mapa definido por listas de retângulos `{ x,
 
 Salas: Computadores, Principal, Energia, Segurança e Reator (porta do **Reator começa fechada**).
 
-`checarColisao()` usa uma **hitbox de 28×28 px nos pés** (`caixaColisao()`), menor que o desenho de 48px, para o personagem passar nas portas de 32px. Colide com paredes, obstáculos, portas fechadas e a nuvem de gás; em colisão, volta à posição anterior. A colisão é resolvida antes do desenho.
+`checarColisao(soFixos)` usa uma **hitbox de 28×28 px nos pés** (`caixaColisao()`), menor que o desenho de 48px, para o personagem passar nas portas de 32px, e devolve `true` se ela toca paredes, obstáculos, portas fechadas ou a nuvem de gás. `atualizarPersonagem()` move **um eixo de cada vez** e desfaz só o eixo que colidiu (na diagonal o personagem desliza pela parede). Se o gás ou uma porta travada surgir em cima do jogador, só paredes e obstáculos bloqueiam até ele sair (`soFixos`). A colisão é resolvida antes do desenho.
+
+`salasDoMapa` guarda o retângulo interno de cada sala; `salaDoPonto(x, y)` diz em qual sala um ponto está (ou `null` nos corredores).
 
 ### 5.4 Loop principal
-`executarJogo(tempo)` via `requestAnimationFrame`, só com a `play-screen` ativa. Pausado, apenas desenha. Sem pausa: `atualizarPartida()` → `atualizarEvento()` → `atualizarPersonagem()` → `checarColisao()` → desenho.
+`executarJogo(tempo)` via `requestAnimationFrame`, só com a `play-screen` ativa. Pausado, apenas desenha. Sem pausa: `atualizarPartida()` → `atualizarEvento()` → `atualizarPersonagem()` (com a colisão) → `enviarPosicao()` → desenho.
 
 ### 5.5 Eventos aleatórios
 
@@ -114,7 +116,8 @@ Salas: Computadores, Principal, Energia, Segurança e Reator (porta do **Reator 
 | `portas` | PORTAS TRAVADAS | Trava Computadores e Energia | 12s |
 | `alarme` | ALARME | Painel pisca e bip a cada 1,4s | 8s |
 
-- Solo: `agendarProximoEvento()` sorteia a cada 18–30s (um único timer, cancelado ao reiniciar ou pausar) e `iniciarEvento()` aplica com duração de 10s.
+- Solo: `agendarProximoEvento()` sorteia a cada 18–30s (um único timer, cancelado ao reiniciar, pausar ou voltar ao menu) e `iniciarEvento()` aplica com a duração própria de cada evento (a mesma tabela do servidor). O botão "Testar evento" usa 8s.
+- Voltar ao menu no meio da partida (`sairDaPartida()`) encerra o evento ativo — o bip do alarme para.
 - Multiplayer: o servidor sorteia; o cliente só chama `aplicarEvento(id, duração, portas)` e `finalizarEvento()`.
 - Avisos curtos (coleta, recusa de tarefa, jogador saiu) usam `mostrarAviso()` no painel de evento.
 
@@ -129,14 +132,17 @@ Salas: Computadores, Principal, Energia, Segurança e Reator (porta do **Reator 
 | `reator` | Estabilizar o reator | 1 → 2 → 3 → 4 |
 | `protocolo` | Ativar o protocolo | Coletar 3 cartões e CONFIRMAR |
 
-- Tecla **E**: abre a tarefa mais próxima a até 100px do **centro** do personagem; senão coleta frasco/cartão a até 70px.
+- Tecla **E**: considera as tarefas a até 100px e os frascos/cartões a até 70px do **centro** do personagem, **só na mesma sala** (`salaDoPonto`), e aciona o **mais próximo**. Assim nenhum coletável fica escondido por uma tarefa vizinha, e o Reator só pode ser usado de dentro da sala (porta aberta).
+- Coletáveis — frascos: (96,144), (336,360), (600,160); cartões: (128,420), (720,112), (720,384).
 - Erros piscam o botão com `.wrong`; CONFIRMAR fica `.selected` com os 3 cartões; ao reabrir, passos já feitos aparecem verdes.
-- Multiplayer: `concluirTarefa()` pede validação ao servidor; só `tarefa:confirmada` chama `marcarTarefaConcluida()`.
+- Multiplayer: `concluirTarefa()` pede validação ao servidor; só `tarefa:confirmada` chama `marcarTarefaConcluida()`. Em `tarefa:recusada`, o minijogo volta ao começo (e é redesenhado se estiver aberto).
+- A pausa e o fim da partida fecham o modal de tarefa.
 
 ### 5.7 Partida
 - Estado em `partida` (300s, `pausada`, `encerrada`, `jogadorAtivo`) e `modoJogo` ("solo" | "rede").
 - `iniciarPartida(modo, dados)` reinicia personagem, coletáveis, portas, tarefas, evento e adversários.
-- **Solo**: 3 adversários simulados avançam/são eliminados ao acaso; `verificarResultado()` decide (6 tarefas, último ativo, ou fim do tempo).
+- **Solo**: 3 adversários simulados. `simularAdversarios()` roda **uma vez por segundo de jogo** (não depende do FPS): 3,5% de chance de um adversário sorteado concluir mais uma tarefa e 0,3% de um ser eliminado. Na simulação, o primeiro adversário chega a 6/6 com mediana de ~3min20s. `verificarResultado()` decide (6 tarefas, último ativo, ou fim do tempo).
+- O HUD mostra **JOGADORES ATIVOS** (você + adversários ativos).
 - **Multiplayer**: adversários são os outros jogadores (progresso real); o resultado vem do servidor (`partida:fim`). Se a conexão cair, `jogadorAtivo = false` → derrota.
 - Pausa completa (movimento, relógio, eventos, bip). No multiplayer só o anfitrião pausa, e pausa para todos.
 
@@ -194,17 +200,13 @@ Sobe o servidor numa porta livre e simula de 3 a 6 jogadores (37 verificações)
 
 ## 8. Limitações conhecidas
 
-1. **Solo**: a eliminação aleatória dos adversários simulados (0,6% por quadro) encerra a partida em ~7s, e depende da taxa de quadros.
-2. **Solo**: eventos automáticos usam a duração padrão de 10s em vez das durações por evento.
-3. A tarefa do **Reator** pode ser aberta pelo lado de fora da parede (a 94px do marcador), sem precisar abrir a porta.
-4. O gás pode prender o personagem se ele estiver dentro da área quando o evento começa.
-5. Na diagonal o personagem não desliza pela parede; teclas podem ficar "presas" se a janela perde o foco.
-6. Sem controles de toque: no celular a interface cabe na tela, mas não dá para andar.
-7. Multiplayer: sem reconexão (recarregar a página = sair da partida).
-8. Multiplayer: o servidor não valida os cliques dos minijogos; a posição só é limitada ao mapa (não confere paredes nem velocidade, então um cliente modificado poderia "teleportar").
-9. Pasta `assets/` vazia; sprites e sons são gerados por código.
-10. Render gratuito "dorme" sem uso: a primeira conexão pode passar dos 15s e mostrar "offline" antes de conectar sozinho.
-11. Multiplayer: as plaquinhas de nome se sobrepõem quando dois jogadores ficam muito próximos.
+1. Sem controles de toque: no celular a interface cabe na tela, mas não dá para andar.
+2. Multiplayer: sem reconexão (recarregar a página = sair da partida).
+3. Multiplayer: o servidor não valida os cliques dos minijogos nem a distância das coletas; a posição só é limitada ao mapa (não confere paredes nem velocidade, então um cliente modificado poderia "teleportar").
+4. Pasta `assets/` vazia; sprites e sons são gerados por código.
+5. Render gratuito "dorme" sem uso: a primeira conexão pode passar dos 15s e mostrar "offline" antes de conectar sozinho.
+6. Multiplayer: as plaquinhas de nome se sobrepõem quando dois jogadores ficam muito próximos.
+7. A tecla E não tem indicação visual de alcance (o jogador descobre pela mensagem de aviso).
 
 ---
 
