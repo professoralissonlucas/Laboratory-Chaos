@@ -4,36 +4,46 @@ Guia para trabalhar neste repositório. A especificação detalhada do estado at
 
 ## Resumo do projeto
 
-**Laboratory Chaos** ("LAB 2.0") é um jogo escolar 2D top-down em pixel art, feito em **HTML, CSS e JavaScript puro**. O jogador controla um estudante num laboratório com 5 salas, precisa concluir **6 tarefas** (minijogos abertos com a tecla **E**) em **5 minutos**, enquanto **eventos aleatórios** (apagão, gás, portas travadas, alarme) atrapalham. Adversários e salas "multijogador" são **simulados localmente** — não há servidor, rede nem persistência.
+**Laboratory Chaos** ("LAB 2.0") é um jogo escolar 2D top-down em pixel art, feito em **HTML, CSS e JavaScript puro**. O jogador controla um estudante num laboratório com 5 salas, precisa concluir **6 tarefas** (minijogos abertos com a tecla **E**) em **5 minutos**, enquanto **eventos aleatórios** (apagão, gás, portas travadas, alarme) atrapalham.
+
+Há dois modos:
+- **Solo** (botão JOGAR): adversários simulados, tudo no navegador. Funciona até abrindo `public/index.html` direto.
+- **Multiplayer** (tela SALAS): servidor **Node.js + Express + Socket.IO**, sem banco de dados (tudo em memória). Salas públicas/privadas, 3 a 5 jogadores, servidor autoritativo (cronômetro, eventos, validação de tarefas, resultado).
 
 - Idioma da interface e do código: português (pt-BR).
-- Para executar: abrir `index.html` no navegador (ou servir a pasta com qualquer servidor estático). Não há build, dependências nem testes automatizados.
+- Para executar o multiplayer: `npm install` e depois `npm start` → abrir `http://localhost:3000` (outros computadores da rede: `http://IP-da-máquina:3000`). Porta configurável com a variável `PORT`.
+- Sem o servidor, a tela Salas mostra "SERVIDOR OFFLINE" e o modo solo continua funcionando.
+- Não há build nem testes automatizados no repositório.
 
 ## Estrutura de arquivos
 
 ```
 rafisa/
-├── index.html    # Todas as telas (<main class="screen">) e overlays
-├── style.css     # Visual pixel art, paleta no :root, breakpoint único de 700px
-├── script.js     # Toda a lógica, dentro de um único DOMContentLoaded
-├── SPEC.md       # Especificação do estado atual e limitações conhecidas
-├── CLAUDE.md     # Este arquivo
-├── .gitignore
-└── assets/
-    ├── images/   # vazio (reservado)
-    └── sounds/   # vazio (reservado)
+├── package.json      # "npm start" → node server/index.js; deps: express, socket.io
+├── server/
+│   └── index.js      # Servidor: arquivos estáticos + Socket.IO + regras das salas/partida
+├── public/           # Tudo que o navegador carrega
+│   ├── index.html    # Todas as telas (<main class="screen">) e overlays
+│   ├── style.css     # Visual pixel art, paleta no :root, breakpoint único de 700px
+│   ├── script.js     # Toda a lógica do cliente, dentro de um único DOMContentLoaded
+│   └── assets/       # images/ e sounds/ vazios (reservados)
+├── SPEC.md           # Especificação do estado atual e limitações conhecidas
+├── CLAUDE.md         # Este arquivo
+└── .gitignore        # ignora node_modules/
 ```
 
-Pontos-chave do `script.js` (ordem aproximada no arquivo):
+Seções do `public/script.js` (cada uma com comentário de cabeçalho):
 
-- Navegação: `abrirTela(id)` + botões com `data-screen`.
-- Personagem: `personagens`, `personagem`, `desenharPersonagem()`, `atualizarPersonagem(delta)`.
-- Mapa: listas `paredes`, `portas`, `obstaculos`; `checarColisao()` (AABB); `desenharFundo()`.
-- Eventos: `configuracaoEventos`, `eventosAleatorios`, `iniciarEvento()`, `finalizarEvento()`, `agendarProximoEvento()`.
-- Tarefas: `tarefas`, `objetosColetaveis`, `abrirTarefa()`, funções `interface<Tarefa>()`, helpers `criarOpcoes()`, `barraProgresso()`, `concluirTarefa()`, `erroTarefa()`.
-- Partida: `partida`, `adversarios`, `iniciarPartida()`, `atualizarPartida()`, `verificarResultado()`, `finalizarPartida()`.
-- Salas locais: objeto `salasLocais`, `exibirLobby()`, `atualizarSalasPublicas()`.
-- Loop: `executarJogo(tempo)` via `requestAnimationFrame`, ativo só com `play-screen` visível.
+1. Navegação e configurações — `abrirTela(id)`, botões `data-screen`, volume/efeitos.
+2. Personagem — `personagem`, `escolherPersonagem()`, `aplicarVelocidade()`, `desenharPersonagem()`, `atualizarPersonagem(delta)`.
+3. Mapa — `paredes`, `portas`, `obstaculos`, `caixaColisao()` (hitbox 28×28 nos pés), `checarColisao()`, `desenharFundo()`.
+4. Eventos — `eventosAleatorios`, `iniciarEvento()` (sorteio solo), `aplicarEvento(id, duração, portas)`, `finalizarEvento()`, `agendarProximoEvento()`.
+5. Tarefas — `tarefas`, `objetosColetaveis`, `interface<Tarefa>()`, `concluirTarefa()` (rede: pede validação), `marcarTarefaConcluida()`.
+6. Partida — `modoJogo` ("solo" | "rede"), `iniciarPartida(modo, dados)`, `atualizarPartida()` (só solo), `verificarResultado()`, `pausarPartida()`/`congelarPartida()`.
+7. Salas — objeto `rede`, `salasRede`, `exibirLobby()`, `conectarServidor()` (todos os `socket.on`).
+8. Loop principal e inicialização — `executarJogo(tempo)` via `requestAnimationFrame`.
+
+O `server/index.js` repete algumas regras do cliente (seção "REGRAS", ex.: tarefas, durações dos eventos, portas travadas). Ao mudar uma regra, mude nos dois arquivos.
 
 ## Convenções
 
@@ -48,6 +58,6 @@ Pontos-chave do `script.js` (ordem aproximada no arquivo):
 
 1. **Não mudar a identidade visual**: manter a paleta do `:root` (`--night`, `--panel`, `--panel-light`, `--blue`, `--purple`, `--pink`, `--yellow`, `--gray`, `--white`), a fonte `"Courier New", monospace`, a estética pixel art, as bordas pretas grossas, as sombras sólidas deslocadas e **nenhuma borda arredondada**.
 2. **Não remover funcionalidades que já funcionam.**
-3. **Sem frameworks ou bundlers no front-end** — apenas HTML, CSS e JavaScript puro.
+3. **Sem frameworks ou bundlers no front-end** — apenas HTML, CSS e JavaScript puro. O cliente Socket.IO vem do próprio servidor (`/socket.io/socket.io.js`), sem CDN. Não converter o `script.js` para ES modules (quebra ao abrir o `index.html` direto).
 4. **Mudanças pequenas e incrementais**, explicando cada uma ao usuário.
 5. **É um projeto escolar**: código legível, com comentários curtos em português.

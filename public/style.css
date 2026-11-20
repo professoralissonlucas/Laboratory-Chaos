@@ -733,6 +733,14 @@ h1 span {
     border: 4px solid #171a31;
 }
 .lobby-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.lobby-toolbar { margin: 12px 0 0; }
+
+/* Botões indisponíveis (ex.: servidor offline, só o anfitrião inicia). */
+.back-button:disabled,
+.room-action:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
 #room-feedback { min-height: 20px; color: var(--yellow); }
 
 @media (max-width: 700px) {

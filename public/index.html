@@ -8,6 +8,10 @@
     <!-- Importa o arquivo de estilos da página. -->
     <link rel="stylesheet" href="style.css">
 
+    <!-- Cliente Socket.IO servido pelo próprio servidor (npm start).
+         Aberto direto no navegador ele não carrega e o jogo fica no modo solo. -->
+    <script src="/socket.io/socket.io.js" defer></script>
+
     <!-- Importa o JavaScript após o carregamento do HTML. -->
     <script src="script.js" defer></script>
 </head>
@@ -84,7 +88,7 @@
                 <div class="match-overlay" id="pause-overlay" hidden>
                     <section class="match-overlay-window">
                         <h2>JOGO PAUSADO</h2>
-                        <p>O cronômetro e os eventos estão suspensos.</p>
+                        <p id="pause-message">O cronômetro e os eventos estão suspensos.</p>
                         <div class="overlay-actions">
                             <button class="back-button" id="resume-button" type="button">CONTINUAR</button>
                             <button class="back-button" id="pause-menu-button" type="button">VOLTAR AO MENU</button>
@@ -215,11 +219,11 @@
         </section>
     </main>
 
-    <!-- TELA DE SALAS: simulação local apenas. -->
+    <!-- TELA DE SALAS: multiplayer pelo servidor (npm start). -->
     <main class="screen" id="rooms-screen">
         <section class="game-window content-window rooms-window">
             <h2>SALAS</h2>
-            <p class="local-warning">SIMULAÇÃO LOCAL — não representa conexão com outros jogadores reais.</p>
+            <p class="local-warning" id="server-status" role="status">VERIFICANDO SERVIDOR...</p>
 
             <div class="room-actions">
                 <button class="room-action" id="create-public-room" type="button"><span>+</span>Criar sala pública</button>
@@ -242,14 +246,26 @@
 
             <div class="room-lobby" id="room-lobby" hidden>
                 <div class="lobby-header">
-                    <div><span class="hud-label">SALA LOCAL</span><h3 id="lobby-room-name">Laboratório</h3></div>
+                    <div><span class="hud-label">SALA</span><h3 id="lobby-room-name">Laboratório</h3></div>
                     <div class="lobby-code"><span>CÓDIGO</span><strong id="lobby-room-code">LAB000</strong></div>
                 </div>
                 <p id="lobby-room-type"></p>
+                <div class="test-toolbar lobby-toolbar">
+                    <label for="lobby-character">
+                        Seu personagem
+                        <select id="lobby-character">
+                            <option value="0">Azul</option>
+                            <option value="1">Rosa</option>
+                            <option value="2">Roxo</option>
+                            <option value="3">Amarelo</option>
+                            <option value="4">Cinza</option>
+                        </select>
+                    </label>
+                </div>
                 <div class="lobby-players" id="lobby-player-list"></div>
                 <div class="lobby-actions">
                     <button class="back-button" id="leave-room-button" type="button">SAIR DA SALA</button>
-                    <button class="back-button" id="start-local-match" type="button">INICIAR TESTE</button>
+                    <button class="back-button" id="start-match" type="button">INICIAR PARTIDA</button>
                 </div>
             </div>
 

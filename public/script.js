@@ -51,6 +51,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // Faz os botões do menu e os botões "Voltar" funcionarem.
     botoesDeTela.forEach((botao) => {
         botao.addEventListener("click", () => {
+            // Voltar ao menu estando numa sala (lobby ou partida em rede) também sai dela.
+            if (botao.dataset.screen === "menu-screen" && rede.sala) salasRede.sair();
+
             abrirTela(botao.dataset.screen);
 
             if (botao.dataset.screen === "play-screen" && typeof iniciarPartida === "function") {
@@ -112,6 +115,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // O evento E verifica se o personagem está próximo de uma tarefa ou objeto.
     window.addEventListener("keydown", (evento) => {
+        // Enquanto o usuário digita (ex.: código da sala), as teclas não controlam o jogo.
+        const alvo = evento.target;
+        const digitando = alvo.tagName === "TEXTAREA" ||
+            (alvo.tagName === "INPUT" && alvo.type === "text");
+        if (digitando) return;
+
         const tecla = evento.key.toLowerCase();
         const teclasMovimento = ["w", "a", "s", "d", "arrowup", "arrowleft", "arrowdown", "arrowright"];
 
@@ -129,18 +138,25 @@ document.addEventListener("DOMContentLoaded", () => {
         teclasPressionadas[evento.key.toLowerCase()] = false;
     });
 
-    // Troca o personagem desenhado e o nome mostrado no HUD.
+    // Escolhe qual dos cinco personagens é desenhado e mostra o nome no HUD.
+    function escolherPersonagem(indice) {
+        personagem.personagemAtual = indice;
+        if (seletorPersonagem) seletorPersonagem.value = String(indice);
+        if (nomeJogador) nomeJogador.textContent = `Estudante ${personagens[indice].nome}`;
+    }
+
     if (seletorPersonagem) {
         seletorPersonagem.addEventListener("change", () => {
-            const nomes = ["Estudante Azul", "Estudante Rosa", "Estudante Roxo", "Estudante Amarelo", "Estudante Cinza"];
-            if (nomeJogador) nomeJogador.textContent = nomes[Number(seletorPersonagem.value)];
-            personagem.personagemAtual = Number(seletorPersonagem.value);
+            escolherPersonagem(Number(seletorPersonagem.value));
         });
     }
 
     // Liga o slider de velocidade ao personagem e mostra o valor.
+    // No multiplayer a velocidade fica fixa em 160 para a corrida ser justa.
     function aplicarVelocidade() {
         if (!controleVelocidade) return;
+        if (modoJogo === "rede") controleVelocidade.value = "160";
+        controleVelocidade.disabled = modoJogo === "rede";
         personagem.velocidade = Number(controleVelocidade.value);
         if (textoVelocidade) textoVelocidade.textContent = controleVelocidade.value;
     }
@@ -335,15 +351,23 @@ document.addEventListener("DOMContentLoaded", () => {
         { x: 704, y: 320, largura: 32, altura: 80, tipo: "equipamento" }
     ];
 
+    // Caixa de colisão nos pés: o desenho tem 48px, mas só esta área de 28x28 colide.
+    // Assim o personagem passa pelas portas de 32px sem mudar o mapa.
+    function caixaColisao() {
+        return { x: personagem.x + 10, y: personagem.y + 20, largura: 28, altura: 28 };
+    }
+
     // Confere colisão com paredes, obstáculos e portas fechadas.
     function checarColisao() {
-        // Verifica se o personagem toca qualquer área sólida.
+        const caixa = caixaColisao();
+
+        // Verifica se a caixa de colisão toca qualquer área sólida.
         function estaSobreposto(retangulo) {
             return (
-                personagem.x < retangulo.x + retangulo.largura &&
-                personagem.x + personagem.tamanho > retangulo.x &&
-                personagem.y < retangulo.y + retangulo.altura &&
-                personagem.y + personagem.tamanho > retangulo.y
+                caixa.x < retangulo.x + retangulo.largura &&
+                caixa.x + caixa.largura > retangulo.x &&
+                caixa.y < retangulo.y + retangulo.altura &&
+                caixa.y + caixa.altura > retangulo.y
             );
         }
 
@@ -570,11 +594,14 @@ document.addEventListener("DOMContentLoaded", () => {
             id: "portas",
             nome: "PORTAS TRAVADAS",
             mensagem: "Duas portas foram temporariamente bloqueadas.",
-            ativar: (duracao) => {
+            // No multiplayer o servidor informa quais portas travar (as mesmas para todos).
+            ativar: (duracao, indicesDoServidor) => {
                 estadoEvento.ativo = "portas";
                 estadoEvento.portasOriginalmenteTravadas = [];
 
-                const portasParaTravar = portas.filter((porta) => porta.aberta).slice(0, 2);
+                const portasParaTravar = indicesDoServidor
+                    ? indicesDoServidor.map((indice) => portas[indice]).filter((porta) => porta && porta.aberta)
+                    : portas.filter((porta) => porta.aberta).slice(0, 2);
                 portasParaTravar.forEach((porta) => {
                     estadoEvento.portasOriginalmenteTravadas.push(porta);
                     porta.aberta = false;
@@ -597,18 +624,27 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     ];
 
+    // Modo solo: sorteia um evento e aplica.
     function iniciarEvento(duracao) {
         if (estadoEvento.ativo) return;
 
         const indice = Math.floor(Math.random() * eventosAleatorios.length);
         const eventoEscolhido = eventosAleatorios[indice];
 
-        estadoEvento.nome = eventoEscolhido.nome;
-        estadoEvento.mensagem = eventoEscolhido.mensagem;
-
         const duracaoEvento = duracao || configuracaoEventos.duracoes[eventoEscolhido.id] ||
             configuracaoEventos.duracaoPadrao;
-        eventoEscolhido.ativar(duracaoEvento);
+        aplicarEvento(eventoEscolhido.id, duracaoEvento);
+    }
+
+    // Aplica um evento pelo id (no multiplayer, o id e a duração vêm do servidor).
+    function aplicarEvento(id, duracaoEvento, portasDoServidor) {
+        const eventoEscolhido = eventosAleatorios.find((evento) => evento.id === id);
+        if (!eventoEscolhido) return;
+        if (estadoEvento.ativo) finalizarEvento();
+
+        estadoEvento.nome = eventoEscolhido.nome;
+        estadoEvento.mensagem = eventoEscolhido.mensagem;
+        eventoEscolhido.ativar(duracaoEvento, portasDoServidor);
 
         painelEvento.classList.add("active");
         nomeEvento.textContent = eventoEscolhido.nome;
@@ -647,7 +683,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const restante = Math.max(0, estadoEvento.terminaEm - Date.now());
         tempoEvento.textContent = `${Math.ceil(restante / 1000)}s`;
 
-        if (restante <= 0) {
+        // No multiplayer quem encerra o evento é o servidor (evento:finalizado).
+        if (restante <= 0 && modoJogo === "solo") {
             finalizarEvento();
         }
     }
@@ -672,6 +709,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (botaoTestarEvento) {
         botaoTestarEvento.addEventListener("click", () => {
+            // No multiplayer só o anfitrião vê o botão, e o servidor sorteia o evento.
+            if (modoJogo === "rede") {
+                if (rede.socket) rede.socket.emit("evento:testar");
+                return;
+            }
             finalizarEvento();
             iniciarEvento(8000);
         });
@@ -689,7 +731,7 @@ document.addEventListener("DOMContentLoaded", () => {
         agendamento.restanteNaPausa = null;
         agendamento.timer = window.setTimeout(() => {
             agendamento.timer = null;
-            if (document.getElementById("play-screen").classList.contains("active") && !partida.pausada) {
+            if (modoJogo === "solo" && document.getElementById("play-screen").classList.contains("active") && !partida.pausada) {
                 iniciarEvento(configuracaoEventos.duracaoPadrao);
             }
             agendarProximoEvento();
@@ -778,10 +820,29 @@ document.addEventListener("DOMContentLoaded", () => {
         contadorTarefas.textContent = `${concluidas}/6`;
     }
 
+    // Fim do minijogo. No multiplayer o servidor precisa validar antes.
     function concluirTarefa(tarefa) {
+        if (modoJogo === "rede") {
+            feedbackTarefa.textContent = "Validando com o servidor...";
+            if (rede.socket) rede.socket.emit("tarefa:concluir", { tarefaId: tarefa.id });
+            return;
+        }
+        marcarTarefaConcluida(tarefa);
+    }
+
+    // Marca a tarefa como feita (solo direto; multiplayer após tarefa:confirmada).
+    function marcarTarefaConcluida(tarefa) {
         tarefa.concluida = true;
         tarefa.progresso = tarefa.total;
         feedbackTarefa.textContent = "Tarefa concluída!";
+
+        // "Desbloquear as portas" abre todas as portas só para quem concluiu.
+        if (tarefa.id === "portas") {
+            portas.forEach((porta) => {
+                porta.aberta = true;
+            });
+        }
+
         atualizarListaTarefas();
         verificarResultado();
     }
@@ -929,10 +990,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 passo += 1;
                 tarefa.progresso = passo;
                 feedbackTarefa.textContent = `${passo}/${tarefa.total} símbolos resolvidos.`;
-                if (passo === tarefa.total) {
-                    concluirTarefa(tarefa);
-                    portas.forEach((porta) => porta.aberta = true);
-                }
+                if (passo === tarefa.total) concluirTarefa(tarefa);
             } else {
                 marcarErro(botao);
                 erroTarefa();
@@ -1014,6 +1072,11 @@ document.addEventListener("DOMContentLoaded", () => {
         modalTarefa.hidden = true;
     });
 
+    // No multiplayer o servidor registra cada coleta (necessária para validar tarefas).
+    function avisarColeta(tipo, indice) {
+        if (modoJogo === "rede" && rede.socket) rede.socket.emit("coletavel:pegar", { tipo, indice });
+    }
+
     function verificarInteracaoTarefa() {
         // Distâncias medidas a partir do centro do personagem.
         // Os raios cresceram 15px porque meio corpo (24px) agora entra na conta.
@@ -1041,11 +1104,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         // Frascos podem ser coletados aproximando-se deles.
-        for (const frasco of objetosColetaveis.frascos) {
+        for (const [indice, frasco] of objetosColetaveis.frascos.entries()) {
             if (!frasco.coletado) {
                 const distancia = Math.hypot(centroX - frasco.x, centroY - frasco.y);
                 if (distancia < raioColeta) {
                     frasco.coletado = true;
+                    avisarColeta("frascos", indice);
                     const frascosColetados = objetosColetaveis.frascos.filter((item) => item.coletado).length;
                     mostrarAviso(`Frasco coletado (${frascosColetados}/3).`);
                     return;
@@ -1054,11 +1118,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         // Cartões de acesso são coletados da mesma forma.
-        for (const cartao of objetosColetaveis.cartoes) {
+        for (const [indice, cartao] of objetosColetaveis.cartoes.entries()) {
             if (!cartao.coletado) {
                 const distancia = Math.hypot(centroX - cartao.x, centroY - cartao.y);
                 if (distancia < raioColeta) {
                     cartao.coletado = true;
+                    avisarColeta("cartoes", indice);
                     const encontrados = objetosColetaveis.cartoes.filter((item) => item.coletado).length;
                     mostrarAviso(`Cartão coletado (${encontrados}/3).`);
                     return;
@@ -1084,11 +1149,27 @@ document.addEventListener("DOMContentLoaded", () => {
         jogadorAtivo: true
     };
 
-    const adversarios = [
-        { nome: "Estudante Rosa", progresso: 1, ativo: true },
-        { nome: "Estudante Roxo", progresso: 2, ativo: true },
-        { nome: "Estudante Cinza", progresso: 1, ativo: true }
+    // "solo": adversários simulados. "rede": partida real pelo servidor.
+    let modoJogo = "solo";
+
+    // Adversários falsos do modo solo.
+    const adversariosSimulados = [
+        { nome: "Estudante Rosa", progresso: 1 },
+        { nome: "Estudante Roxo", progresso: 2 },
+        { nome: "Estudante Cinza", progresso: 1 }
     ];
+
+    // Lista mostrada no painel: simulados (solo) ou jogadores reais (rede).
+    const adversarios = [];
+
+    function preencherAdversariosSimulados() {
+        adversarios.length = 0;
+        adversariosSimulados.forEach((adversario) => {
+            adversarios.push({ ...adversario, ativo: true });
+        });
+    }
+
+    preencherAdversariosSimulados();
 
     const relogioPartida = document.getElementById("match-clock");
     const painelAdversarios = document.getElementById("opponents-panel");
@@ -1096,6 +1177,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const pauseOverlay = document.getElementById("pause-overlay");
     const resultOverlay = document.getElementById("result-overlay");
     const pauseButton = document.getElementById("pause-button");
+    const botaoContinuar = document.getElementById("resume-button");
+    const mensagemPausa = document.getElementById("pause-message");
+    const botaoJogarNovamente = document.getElementById("restart-button");
+
+    // No multiplayer só o anfitrião pausa, continua e testa eventos.
+    function atualizarControlesAnfitriao() {
+        const podeControlar = modoJogo === "solo" || souAnfitriao();
+        pauseButton.hidden = !podeControlar;
+        botaoContinuar.hidden = !podeControlar;
+        if (botaoTestarEvento) botaoTestarEvento.hidden = !podeControlar;
+        mensagemPausa.textContent = podeControlar
+            ? "O cronômetro e os eventos estão suspensos."
+            : "Pausado pelo anfitrião. Aguarde...";
+    }
 
     function atualizarPainelAdversarios() {
         painelAdversarios.innerHTML = "";
@@ -1106,7 +1201,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const item = document.createElement("div");
             item.className = `opponent${adversario.ativo ? "" : " eliminated"}`;
-            item.textContent = `${adversario.nome}: ${adversario.ativo ? `${adversario.progresso}/6` : "ELIMINADO"}`;
+            const textoInativo = modoJogo === "rede" ? "DESCONECTADO" : "ELIMINADO";
+            item.textContent = `${adversario.nome}: ${adversario.ativo ? `${adversario.progresso}/6` : textoInativo}`;
             painelAdversarios.appendChild(item);
         });
 
@@ -1139,11 +1235,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
         document.getElementById("result-title").textContent = vitoria ? "VITÓRIA" : "DERROTA";
         document.getElementById("result-message").textContent = motivo;
+        // No multiplayer, "jogar novamente" volta para o lobby da sala.
+        botaoJogarNovamente.textContent = modoJogo === "rede" ? "VOLTAR À SALA" : "JOGAR NOVAMENTE";
         resultOverlay.hidden = false;
     }
 
     function verificarResultado() {
         if (partida.encerrada) return;
+
+        // jogadorAtivo vira false quando o jogador perde a conexão com o servidor.
+        if (!partida.jogadorAtivo) {
+            finalizarPartida(false, modoJogo === "rede"
+                ? "Você perdeu a conexão com o servidor."
+                : "Você foi eliminado abstratamente da partida.");
+            return;
+        }
+
+        // No multiplayer o restante do resultado é decidido pelo servidor (partida:fim).
+        if (modoJogo === "rede") return;
 
         const tarefasConcluidas = tarefas.filter((tarefa) => tarefa.concluida).length;
 
@@ -1162,15 +1271,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const adversariosAtivos = adversarios.filter((adversario) => adversario.ativo);
 
-        if (partida.jogadorAtivo && adversariosAtivos.length === 0) {
+        if (adversariosAtivos.length === 0) {
             finalizarPartida(true, "Você é o último estudante ativo da partida!");
-            return;
-        }
-
-        // Hoje nada torna jogadorAtivo falso. Esta verificação fica pronta para o
-        // multiplayer: quando o jogador se desconectar, o servidor marcará false.
-        if (!partida.jogadorAtivo) {
-            finalizarPartida(false, "Você foi eliminado abstratamente da partida.");
             return;
         }
 
@@ -1191,11 +1293,14 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    function iniciarPartida() {
+    // modo "solo" (padrão) ou "rede"; dadosRede vem de partida:iniciada.
+    function iniciarPartida(modo, dadosRede) {
+        modoJogo = modo === "rede" ? "rede" : "solo";
+
         // Encerra o evento ativo primeiro (ele pode ter travado portas).
         finalizarEvento();
 
-        partida.tempoRestante = partida.duracaoInicial;
+        partida.tempoRestante = dadosRede ? dadosRede.tempoRestante : partida.duracaoInicial;
         partida.ultimaAtualizacao = Date.now();
         partida.pausada = false;
         partida.encerrada = false;
@@ -1231,30 +1336,68 @@ document.addEventListener("DOMContentLoaded", () => {
             tarefa.progresso = 0;
         });
 
-        adversarios.forEach((adversario, indice) => {
-            adversario.ativo = true;
-            adversario.progresso = indice === 1 ? 2 : 1;
-        });
+        if (modoJogo === "rede") {
+            // Adversários são os outros jogadores reais; personagem é o escolhido no lobby.
+            adversarios.length = 0;
+            dadosRede.jogadores.forEach((jogador) => {
+                if (jogador.id === rede.meuId) {
+                    escolherPersonagem(jogador.personagem);
+                } else {
+                    adversarios.push({ id: jogador.id, nome: jogador.nome, progresso: 0, ativo: true });
+                }
+            });
 
-        // Recomeça a contagem do próximo evento (cancela o timer antigo).
-        agendarProximoEvento();
+            // Eventos vêm do servidor: cancela o agendamento local.
+            window.clearTimeout(agendamento.timer);
+            agendamento.timer = null;
+        } else {
+            preencherAdversariosSimulados();
+            escolherPersonagem(Number(seletorPersonagem ? seletorPersonagem.value : 0));
+
+            // Recomeça a contagem do próximo evento (cancela o timer antigo).
+            agendarProximoEvento();
+        }
+
+        // Seletor e velocidade ficam travados no multiplayer.
+        if (seletorPersonagem) seletorPersonagem.disabled = modoJogo === "rede";
+        aplicarVelocidade();
+        atualizarControlesAnfitriao();
 
         atualizarCronometro();
         atualizarListaTarefas();
         atualizarPainelAdversarios();
     }
 
+    // Botão PAUSAR. No multiplayer o anfitrião pede ao servidor, que pausa para todos.
     function pausarPartida() {
         if (partida.encerrada || partida.pausada) return;
+        if (modoJogo === "rede") {
+            if (souAnfitriao()) rede.socket.emit("partida:pausar", { pausada: true });
+            return;
+        }
+        congelarPartida();
+    }
 
+    // Botão CONTINUAR.
+    function continuarPartida() {
+        if (partida.encerrada || !partida.pausada) return;
+        if (modoJogo === "rede") {
+            if (souAnfitriao()) rede.socket.emit("partida:pausar", { pausada: false });
+            return;
+        }
+        descongelarPartida();
+    }
+
+    // Aplica a pausa de fato (solo: na hora; rede: ao receber partida:pausada).
+    function congelarPartida() {
+        if (partida.encerrada || partida.pausada) return;
         partida.pausada = true;
         pausarEventos();
         pauseOverlay.hidden = false;
     }
 
-    function continuarPartida() {
+    function descongelarPartida() {
         if (partida.encerrada || !partida.pausada) return;
-
         partida.pausada = false;
         partida.ultimaAtualizacao = Date.now();
         retomarEventos();
@@ -1262,6 +1405,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function atualizarPartida() {
+        // No multiplayer o relógio é do servidor e não há adversários simulados.
+        if (modoJogo === "rede") return;
         if (!partida.iniciou || partida.pausada || partida.encerrada) return;
 
         const agora = Date.now();
@@ -1299,83 +1444,41 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     pauseButton.addEventListener("click", pausarPartida);
-    document.getElementById("resume-button").addEventListener("click", continuarPartida);
+    botaoContinuar.addEventListener("click", continuarPartida);
 
     document.getElementById("pause-menu-button").addEventListener("click", () => {
         pauseOverlay.hidden = true;
+        if (rede.sala) salasRede.sair();
         abrirTela("menu-screen");
     });
 
-    document.getElementById("restart-button").addEventListener("click", iniciarPartida);
+    botaoJogarNovamente.addEventListener("click", () => {
+        if (modoJogo === "rede") {
+            // A sala volta ao lobby no servidor; o anfitrião inicia outra partida.
+            resultOverlay.hidden = true;
+            abrirTela("rooms-screen");
+            return;
+        }
+        iniciarPartida("solo");
+    });
 
     document.getElementById("result-menu-button").addEventListener("click", () => {
         resultOverlay.hidden = true;
+        if (rede.sala) salasRede.sair();
         abrirTela("menu-screen");
     });
 
     // =================================================================
-    // 7. SALAS (simulação local)
+    // 7. SALAS (multiplayer pelo servidor Socket.IO)
     // =================================================================
 
-    // Camada demonstrativa de salas: os dados ficam somente em memória.
-    // Pode ser substituída por HTTP ou WebSocket no futuro.
-    const salasLocais = {
-        criada: null,
-        listarPublicas() {
-            return [
-                { id: "LAB101", nome: "Laboratório Azul", publica: true, jogadores: 3, capacidade: 5, anfitriao: "Estudante Azul", personagemAnfitriao: "Azul" },
-                { id: "LAB204", nome: "Experimento Rosa", publica: true, jogadores: 4, capacidade: 5, anfitriao: "Estudante Rosa", personagemAnfitriao: "Rosa" },
-                { id: "LAB333", nome: "Caos do Reator", publica: true, jogadores: 3, capacidade: 5, anfitriao: "Estudante Roxo", personagemAnfitriao: "Roxo" }
-            ];
-        },
-        gerarCodigo() {
-            const letras = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-            let codigo = "LAB";
-            for (let indice = 0; indice < 3; indice += 1) {
-                codigo += letras[Math.floor(Math.random() * letras.length)];
-            }
-            return codigo;
-        },
-        criar(nome, publica) {
-            this.criada = {
-                id: this.gerarCodigo(),
-                nome,
-                publica,
-                capacidade: 5,
-                jogadores: [
-                    { nome: "Estudante Azul", personagem: "Azul", anfitriao: true },
-                    { nome: "Estudante Rosa", personagem: "Rosa", anfitriao: false },
-                    { nome: "Estudante Roxo", personagem: "Roxo", anfitriao: false }
-                ]
-            };
-            return this.criada;
-        },
-        buscarPorCodigo(codigo) {
-            const codigoNormalizado = codigo.trim().toUpperCase();
-            if (this.criada && this.criada.id === codigoNormalizado) return this.criada;
-            return this.listarPublicas().find((sala) => sala.id === codigoNormalizado) || null;
-        },
-        entrar(sala) {
-            if (!sala) return false;
-            if (Array.isArray(sala.jogadores)) {
-                this.criada = sala;
-                return true;
-            }
-            if (sala.jogadores >= sala.capacidade) return false;
-
-            this.criada = {
-                id: sala.id,
-                nome: sala.nome,
-                publica: true,
-                capacidade: sala.capacidade,
-                jogadores: [
-                    { nome: sala.anfitriao, personagem: sala.personagemAnfitriao, anfitriao: true },
-                    { nome: "Estudante Azul", personagem: "Azul", anfitriao: false },
-                    { nome: "Estudante Amarelo", personagem: "Amarelo", anfitriao: false }
-                ]
-            };
-            return true;
-        }
+    // Estado da conexão. Sem servidor (index.html aberto direto), "io" não existe.
+    const rede = {
+        socket: null,
+        online: false,
+        meuId: null,
+        sala: null,
+        publicas: []
     };
 
     const criarSalaPublica = document.getElementById("create-public-room");
@@ -1385,26 +1488,92 @@ document.addEventListener("DOMContentLoaded", () => {
     const feedbackSala = document.getElementById("room-feedback");
     const listaSalasPublicas = document.getElementById("public-room-list");
     const lobby = document.getElementById("room-lobby");
+    const statusServidor = document.getElementById("server-status");
+    const seletorLobby = document.getElementById("lobby-character");
+    const botaoIniciarPartida = document.getElementById("start-match");
 
-    function corDoPersonagem(nome) {
-        const cores = { Azul: "#62c9df", Rosa: "#ed87b8", Roxo: "#8b66b5", Amarelo: "#f4d35e", Cinza: "#bbc1d1" };
-        return cores[nome] || "#bbc1d1";
+    function souAnfitriao() {
+        return Boolean(rede.sala && rede.sala.anfitriaoId === rede.meuId);
     }
 
+    // Mostra se o servidor está disponível e libera/bloqueia os botões de sala.
+    function atualizarStatusServidor() {
+        statusServidor.textContent = rede.online
+            ? "SERVIDOR ONLINE — salas reais com outros jogadores."
+            : "SERVIDOR OFFLINE — use JOGAR para o modo solo.";
+
+        [criarSalaPublica, criarSalaPrivada, entrarSalaBotao].forEach((botao) => {
+            botao.disabled = !rede.online;
+        });
+        codigoSalaInput.disabled = !rede.online;
+
+        if (!rede.online) {
+            rede.sala = null;
+            rede.publicas = [];
+            lobby.hidden = true;
+        }
+        atualizarSalasPublicas();
+    }
+
+    // Ações das salas: cada uma envia um evento ao servidor.
+    const salasRede = {
+        criar(publica) {
+            const nome = publica ? "Laboratório Público" : "Laboratório Privado";
+            rede.socket.emit("sala:criar", { publica, nome }, tratarRespostaSala);
+        },
+        entrar(codigo) {
+            rede.socket.emit("sala:entrar", { codigo }, tratarRespostaSala);
+        },
+        sair() {
+            if (rede.socket && rede.sala) rede.socket.emit("sala:sair");
+            rede.sala = null;
+            lobby.hidden = true;
+            feedbackSala.textContent = "Você saiu da sala.";
+
+            // Saiu no meio da partida: para o evento (e o bip do alarme).
+            if (modoJogo === "rede") finalizarEvento();
+        },
+        trocarPersonagem(indice) {
+            rede.socket.emit("sala:personagem", { personagem: indice }, (resposta) => {
+                if (!resposta.ok) feedbackSala.textContent = resposta.erro;
+            });
+        },
+        iniciar() {
+            rede.socket.emit("partida:iniciar", null, (resposta) => {
+                if (!resposta.ok) feedbackSala.textContent = resposta.erro;
+            });
+        }
+    };
+
+    function tratarRespostaSala(resposta) {
+        if (!resposta.ok) {
+            feedbackSala.textContent = resposta.erro;
+            return;
+        }
+        rede.sala = resposta.sala;
+        exibirLobby(resposta.sala);
+    }
+
+    function corDoPersonagem(indice) {
+        const cores = ["#62c9df", "#ed87b8", "#8b66b5", "#f4d35e", "#bbc1d1"];
+        return cores[indice] || "#bbc1d1";
+    }
+
+    // Desenha o lobby com os jogadores da sala (dados do servidor).
     function exibirLobby(sala) {
         lobby.hidden = false;
         document.getElementById("lobby-room-name").textContent = sala.nome;
-        document.getElementById("lobby-room-code").textContent = sala.id;
-        document.getElementById("lobby-room-type").textContent = sala.publica
-            ? "Sala pública • 3 a 5 jogadores"
-            : "Sala privada • 3 a 5 jogadores";
+        document.getElementById("lobby-room-code").textContent = sala.codigo;
+        document.getElementById("lobby-room-type").textContent =
+            `${sala.publica ? "Sala pública" : "Sala privada"} • ${sala.jogadores.length}/${sala.capacidade} jogadores (mínimo ${sala.minimo})`;
 
         const listaJogadores = document.getElementById("lobby-player-list");
         listaJogadores.innerHTML = "";
 
         sala.jogadores.forEach((jogador) => {
+            const anfitriao = jogador.id === sala.anfitriaoId;
             const cartao = document.createElement("div");
-            cartao.className = `lobby-player${jogador.anfitriao ? " host" : ""}`;
+            cartao.className = `lobby-player${anfitriao ? " host" : ""}`;
 
             const avatar = document.createElement("div");
             avatar.className = "player-avatar";
@@ -1414,23 +1583,43 @@ document.addEventListener("DOMContentLoaded", () => {
             nome.textContent = jogador.nome;
 
             const descricao = document.createElement("span");
-            descricao.textContent = jogador.anfitriao ? "ANFITRIÃO" : jogador.personagem;
+            descricao.textContent = `${anfitriao ? "ANFITRIÃO" : "JOGADOR"}${jogador.id === rede.meuId ? " • VOCÊ" : ""}`;
 
             cartao.append(avatar, nome, descricao);
             listaJogadores.appendChild(cartao);
         });
-        feedbackSala.textContent = "Sala local aberta.";
+
+        // Personagens já escolhidos por outros ficam indisponíveis.
+        const eu = sala.jogadores.find((jogador) => jogador.id === rede.meuId);
+        [...seletorLobby.options].forEach((opcao) => {
+            opcao.disabled = sala.jogadores.some((jogador) =>
+                jogador.id !== rede.meuId && jogador.personagem === Number(opcao.value));
+        });
+        if (eu) seletorLobby.value = String(eu.personagem);
+
+        // Só o anfitrião inicia, e só com o mínimo de jogadores.
+        const podeIniciar = souAnfitriao() && sala.jogadores.length >= sala.minimo;
+        botaoIniciarPartida.disabled = !podeIniciar;
+        botaoIniciarPartida.textContent = souAnfitriao() ? "INICIAR PARTIDA" : "AGUARDANDO ANFITRIÃO";
+        feedbackSala.textContent = "";
     }
 
     function atualizarSalasPublicas() {
         listaSalasPublicas.innerHTML = "";
 
-        salasLocais.listarPublicas().forEach((sala) => {
+        if (rede.publicas.length === 0) {
+            const vazio = document.createElement("p");
+            vazio.textContent = rede.online ? "Nenhuma sala pública aberta." : "Indisponível sem servidor.";
+            listaSalasPublicas.appendChild(vazio);
+            return;
+        }
+
+        rede.publicas.forEach((sala) => {
             const linha = document.createElement("div");
             linha.className = "public-room";
 
             const nome = document.createElement("strong");
-            nome.textContent = sala.nome;
+            nome.textContent = `${sala.nome} (${sala.codigo})`;
 
             const quantidade = document.createElement("span");
             quantidade.textContent = `${sala.jogadores}/${sala.capacidade} jogadores`;
@@ -1439,37 +1628,155 @@ document.addEventListener("DOMContentLoaded", () => {
             botao.type = "button";
             botao.className = "back-button";
             botao.textContent = "ENTRAR";
-            botao.addEventListener("click", () => {
-                if (salasLocais.entrar(sala)) exibirLobby(salasLocais.criada);
-            });
+            botao.addEventListener("click", () => salasRede.entrar(sala.codigo));
 
             linha.append(nome, quantidade, botao);
             listaSalasPublicas.appendChild(linha);
         });
     }
 
-    criarSalaPublica.addEventListener("click", () => exibirLobby(salasLocais.criar("Laboratório Público", true)));
-    criarSalaPrivada.addEventListener("click", () => exibirLobby(salasLocais.criar("Laboratório Privado", false)));
+    criarSalaPublica.addEventListener("click", () => salasRede.criar(true));
+    criarSalaPrivada.addEventListener("click", () => salasRede.criar(false));
 
     entrarSalaBotao.addEventListener("click", () => {
-        const sala = salasLocais.buscarPorCodigo(codigoSalaInput.value);
-        if (!sala) {
-            feedbackSala.textContent = "Sala não encontrada nesta simulação local.";
+        const codigo = codigoSalaInput.value.trim();
+        if (!codigo) {
+            feedbackSala.textContent = "Digite o código da sala.";
             return;
         }
-        if (salasLocais.entrar(sala)) exibirLobby(salasLocais.criada);
+        salasRede.entrar(codigo);
     });
 
-    document.getElementById("leave-room-button").addEventListener("click", () => {
-        lobby.hidden = true;
-        salasLocais.criada = null;
-        feedbackSala.textContent = "Você saiu da sala local.";
-    });
+    document.getElementById("leave-room-button").addEventListener("click", () => salasRede.sair());
+    seletorLobby.addEventListener("change", () => salasRede.trocarPersonagem(Number(seletorLobby.value)));
+    botaoIniciarPartida.addEventListener("click", () => salasRede.iniciar());
 
-    document.getElementById("start-local-match").addEventListener("click", () => {
-        abrirTela("play-screen");
-        if (typeof iniciarPartida === "function") iniciarPartida();
-    });
+    // Monta uma frase de resultado igual para todos, do ponto de vista de cada um.
+    function textoResultado(dados, venci) {
+        if (dados.tipo === "tarefas") {
+            return venci ? "Você concluiu as seis tarefas antes dos adversários!"
+                : `${dados.vencedorNome} concluiu as seis tarefas primeiro!`;
+        }
+        if (dados.tipo === "ultimo") {
+            return venci ? "Você é o último estudante ativo da partida!"
+                : `${dados.vencedorNome} foi o último estudante ativo.`;
+        }
+        if (dados.tipo === "tempo") {
+            return venci ? "Você liderou as tarefas quando o tempo terminou!"
+                : `${dados.vencedorNome} terminou com mais tarefas concluídas.`;
+        }
+        return "Empate ao final do tempo. Nenhum jogador venceu!";
+    }
+
+    // Liga ao servidor e trata cada evento que ele envia.
+    function conectarServidor() {
+        if (typeof io === "undefined") {
+            atualizarStatusServidor();
+            return;
+        }
+
+        const socket = io();
+        rede.socket = socket;
+
+        socket.on("connect", () => {
+            rede.online = true;
+            rede.meuId = socket.id;
+            atualizarStatusServidor();
+        });
+
+        // Servidor fora do ar: o Socket.IO continua tentando reconectar sozinho.
+        socket.on("connect_error", () => {
+            rede.online = false;
+            atualizarStatusServidor();
+        });
+
+        socket.on("disconnect", () => {
+            rede.online = false;
+            atualizarStatusServidor();
+
+            // Caiu no meio da partida: o jogador sai (derrota por desconexão).
+            if (modoJogo === "rede" && partida.iniciou && !partida.encerrada) {
+                partida.jogadorAtivo = false;
+                finalizarEvento();
+                verificarResultado();
+            }
+        });
+
+        socket.on("salas:publicas", (lista) => {
+            rede.publicas = lista;
+            atualizarSalasPublicas();
+        });
+
+        socket.on("sala:atualizada", (sala) => {
+            rede.sala = sala;
+            if (sala.estado === "lobby") exibirLobby(sala);
+            // Pode ter mudado o anfitrião durante a partida.
+            if (modoJogo === "rede") atualizarControlesAnfitriao();
+        });
+
+        socket.on("partida:iniciada", (dados) => {
+            abrirTela("play-screen");
+            iniciarPartida("rede", dados);
+        });
+
+        socket.on("partida:estado", (dados) => {
+            if (modoJogo !== "rede" || partida.encerrada) return;
+            partida.tempoRestante = dados.tempoRestante;
+            atualizarCronometro();
+            if (dados.evento && estadoEvento.ativo) {
+                estadoEvento.terminaEm = Date.now() + dados.evento.restanteMs;
+                tempoEvento.textContent = `${Math.ceil(dados.evento.restanteMs / 1000)}s`;
+            }
+        });
+
+        socket.on("partida:pausada", (dados) => {
+            if (dados.pausada) congelarPartida();
+            else descongelarPartida();
+        });
+
+        socket.on("evento:iniciado", (dados) => {
+            aplicarEvento(dados.id, dados.duracaoMs, dados.portas);
+        });
+
+        socket.on("evento:finalizado", () => {
+            finalizarEvento();
+        });
+
+        socket.on("progresso:atualizado", (dados) => {
+            const adversario = adversarios.find((item) => item.id === dados.jogadorId);
+            if (adversario) {
+                adversario.progresso = dados.tarefasConcluidas;
+                atualizarPainelAdversarios();
+            }
+        });
+
+        socket.on("tarefa:confirmada", (dados) => {
+            const tarefa = tarefas.find((item) => item.id === dados.tarefaId);
+            if (tarefa && !tarefa.concluida) marcarTarefaConcluida(tarefa);
+        });
+
+        socket.on("tarefa:recusada", (dados) => {
+            const tarefa = tarefas.find((item) => item.id === dados.tarefaId);
+            if (tarefa && tarefa.concluida) return;
+            feedbackTarefa.textContent = dados.motivo;
+            mostrarAviso(dados.motivo);
+        });
+
+        socket.on("jogador:saiu", (dados) => {
+            const adversario = adversarios.find((item) => item.id === dados.jogadorId);
+            if (adversario) {
+                adversario.ativo = false;
+                atualizarPainelAdversarios();
+                if (modoJogo === "rede" && !partida.encerrada) mostrarAviso(`${adversario.nome} saiu da partida.`);
+            }
+        });
+
+        socket.on("partida:fim", (dados) => {
+            if (modoJogo !== "rede") return;
+            const venci = dados.vencedorId === rede.meuId;
+            finalizarPartida(venci, textoResultado(dados, venci));
+        });
+    }
 
     // =================================================================
     // 8. LOOP PRINCIPAL E INICIALIZAÇÃO
@@ -1505,7 +1812,8 @@ document.addEventListener("DOMContentLoaded", () => {
     atualizarListaTarefas();
     atualizarPainelAdversarios();
     atualizarCronometro();
-    atualizarSalasPublicas();
+    atualizarControlesAnfitriao();
+    conectarServidor();
 
     if (contexto) {
         desenharFundo();
