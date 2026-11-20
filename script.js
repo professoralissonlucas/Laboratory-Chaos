@@ -64,11 +64,14 @@ document.addEventListener("DOMContentLoaded", () => {
         { nome: "Cinza", roupa: "#bbc1d1", detalhe: "#747b91", cabelo: "#353a50" }
     ];
 
+    // Posição onde o personagem começa cada partida.
+    const posicaoInicial = { x: 376, y: 288 };
+
     const personagem = {
-        x: 376,
-        y: 288,
-        posicaoAnteriorX: 376,
-        posicaoAnteriorY: 288,
+        x: posicaoInicial.x,
+        y: posicaoInicial.y,
+        posicaoAnteriorX: posicaoInicial.x,
+        posicaoAnteriorY: posicaoInicial.y,
         tamanho: 48,
         velocidade: 160,
         direcao: "baixo",
@@ -90,7 +93,7 @@ document.addEventListener("DOMContentLoaded", () => {
             teclasPressionadas[tecla] = true;
         }
 
-        if (tecla === "e" && modalTarefa && modalTarefa.hidden) {
+        if (tecla === "e" && modalTarefa && modalTarefa.hidden && !partida.pausada) {
             verificarInteracaoTarefa();
         }
     });
@@ -154,6 +157,11 @@ document.addEventListener("DOMContentLoaded", () => {
         { x: 512, y: 304, largura: 16, altura: 32, aberta: true, nome: "Principal" }
     ];
 
+    // Lembra o estado original de cada porta para reiniciar a partida.
+    portas.forEach((porta) => {
+        porta.abertaInicial = porta.aberta;
+    });
+
     // Objetos decorativos que também possuem colisão.
     const obstaculos = [
         { x: 48, y: 48, largura: 64, altura: 32, tipo: "mesa" },
@@ -203,7 +211,15 @@ document.addEventListener("DOMContentLoaded", () => {
         terminaEm: 0,
         gas: null,
         portasOriginalmenteTravadas: [],
-        intervaloSom: null
+        intervaloSom: null,
+        restanteNaPausa: 0
+    };
+
+    // Guarda o timer do próximo evento para poder pausar e cancelar.
+    const agendamento = {
+        timer: null,
+        disparaEm: 0,
+        restanteNaPausa: null
     };
 
     function tocarAlarme() {
@@ -336,6 +352,24 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    let temporizadorAviso = null;
+
+    // Mostra um aviso curto no painel de evento e depois restaura o texto.
+    function mostrarAviso(texto) {
+        window.clearTimeout(temporizadorAviso);
+        if (!estadoEvento.ativo) nomeEvento.textContent = "AVISO";
+        mensagemEvento.textContent = texto;
+
+        temporizadorAviso = window.setTimeout(() => {
+            if (estadoEvento.ativo) {
+                mensagemEvento.textContent = estadoEvento.mensagem;
+            } else {
+                nomeEvento.textContent = "SISTEMA NORMAL";
+                mensagemEvento.textContent = "Nenhum evento ativo.";
+            }
+        }, 2500);
+    }
+
     if (botaoTestarEvento) {
         botaoTestarEvento.addEventListener("click", () => {
             finalizarEvento();
@@ -343,19 +377,54 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    function agendarProximoEvento() {
-        const intervalo = configuracaoEventos.intervaloMinimo +
+    // Agenda o próximo evento. O atraso opcional serve para retomar após a pausa.
+    function agendarProximoEvento(atraso) {
+        // Cancela o timer anterior para nunca existirem dois ao mesmo tempo.
+        window.clearTimeout(agendamento.timer);
+
+        const intervalo = atraso !== undefined ? atraso : configuracaoEventos.intervaloMinimo +
             Math.random() * (configuracaoEventos.intervaloMaximo - configuracaoEventos.intervaloMinimo);
 
-        window.setTimeout(() => {
-            if (document.getElementById("play-screen").classList.contains("active")) {
+        agendamento.disparaEm = Date.now() + intervalo;
+        agendamento.restanteNaPausa = null;
+        agendamento.timer = window.setTimeout(() => {
+            agendamento.timer = null;
+            if (document.getElementById("play-screen").classList.contains("active") && !partida.pausada) {
                 iniciarEvento(configuracaoEventos.duracaoPadrao);
             }
             agendarProximoEvento();
         }, intervalo);
     }
 
-    agendarProximoEvento();
+    // Congela o evento ativo, o bip do alarme e o agendamento durante a pausa.
+    function pausarEventos() {
+        const agora = Date.now();
+
+        if (estadoEvento.ativo) {
+            estadoEvento.restanteNaPausa = Math.max(0, estadoEvento.terminaEm - agora);
+            window.clearInterval(estadoEvento.intervaloSom);
+        }
+
+        if (agendamento.timer) {
+            window.clearTimeout(agendamento.timer);
+            agendamento.timer = null;
+            agendamento.restanteNaPausa = Math.max(0, agendamento.disparaEm - agora);
+        }
+    }
+
+    // Retoma tudo de onde parou ao continuar a partida.
+    function retomarEventos() {
+        if (estadoEvento.ativo) {
+            estadoEvento.terminaEm = Date.now() + estadoEvento.restanteNaPausa;
+            if (estadoEvento.ativo === "alarme") {
+                estadoEvento.intervaloSom = window.setInterval(tocarAlarme, 1400);
+            }
+        }
+
+        if (agendamento.restanteNaPausa !== null) {
+            agendarProximoEvento(agendamento.restanteNaPausa);
+        }
+    }
 
     // Sistema das seis tarefas da partida.
     const tarefas = [
@@ -684,12 +753,16 @@ document.addEventListener("DOMContentLoaded", () => {
         ultimoTempo = tempoAtual;
 
         if (telas[0] && document.getElementById("play-screen").classList.contains("active")) {
-            atualizarPartida();
-            atualizarEvento();
-            atualizarPersonagem(Math.min(deltaTempo, 0.05));
+            // Pausado: nada se move, só o desenho continua.
+            if (!partida.pausada) {
+                atualizarPartida();
+                atualizarEvento();
+                atualizarPersonagem(Math.min(deltaTempo, 0.05));
+                // Resolve a colisão antes de desenhar, para não haver quadro sobreposto.
+                checarColisao();
+            }
             desenharFundo();
             desenharPersonagem();
-            checarColisao();
         }
 
         requestAnimationFrame(executarJogo);
@@ -734,23 +807,26 @@ document.addEventListener("DOMContentLoaded", () => {
     function interfaceFrascos(tarefa) {
         const sequencia = ["AZUL", "ROSA", "AMARELO"];
         let passo = tarefa.progresso;
-        instrucoesTarefa.textContent = "Organize os frascos nesta sequência: AZUL, ROSA e AMARELO.";
+        const contarFrascos = () => objetosColetaveis.frascos.filter((frasco) => frasco.coletado).length;
+        instrucoesTarefa.textContent = `Colete os 3 frascos e organize nesta sequência: AZUL, ROSA e AMARELO. Coletados: ${contarFrascos()}/3.`;
 
         criarOpcoes(tarefa, sequencia, (opcao, botao) => {
             if (tarefa.concluida) return;
+
+            // Só aceita a sequência depois de coletar todos os frascos.
+            const frascosColetados = contarFrascos();
+            if (frascosColetados < tarefa.total) {
+                feedbackTarefa.textContent = `Faltam ${tarefa.total - frascosColetados} frascos para organizar.`;
+                return;
+            }
+
             if (opcao === sequencia[passo]) {
                 botao.className = "task-option correct";
                 botao.disabled = true;
                 passo += 1;
                 tarefa.progresso = passo;
-                const frascosColetados = objetosColetaveis.frascos.filter((frasco) => frasco.coletado).length;
-
-                if (frascosColetados < tarefa.total) {
-                    feedbackTarefa.textContent = `Faltam ${tarefa.total - frascosColetados} frascos para organizar.`;
-                } else {
-                    feedbackTarefa.textContent = `${passo}/${tarefa.total} frascos organizados.`;
-                    if (passo === tarefa.total) concluirTarefa(tarefa);
-                }
+                feedbackTarefa.textContent = `${passo}/${tarefa.total} frascos organizados.`;
+                if (passo === tarefa.total) concluirTarefa(tarefa);
             } else {
                 erroTarefa();
             }
@@ -875,16 +951,23 @@ document.addEventListener("DOMContentLoaded", () => {
     atualizarListaTarefas();
 
     function verificarInteracaoTarefa() {
+        // Distâncias medidas a partir do centro do personagem.
+        // Os raios cresceram 15px porque meio corpo (24px) agora entra na conta.
+        const centroX = personagem.x + personagem.tamanho / 2;
+        const centroY = personagem.y + personagem.tamanho / 2;
+        const raioTarefa = 100;
+        const raioColeta = 70;
+
+        // Escolhe a tarefa mais próxima dentro do raio.
         let tarefaEncontrada = null;
+        let menorDistancia = raioTarefa;
 
         for (const tarefa of tarefas) {
-            const distanciaX = personagem.x - tarefa.x;
-            const distanciaY = personagem.y - tarefa.y;
-            const distancia = Math.sqrt(distanciaX * distanciaX + distanciaY * distanciaY);
+            const distancia = Math.hypot(centroX - tarefa.x, centroY - tarefa.y);
 
-            if (distancia < 85) {
+            if (distancia < menorDistancia) {
+                menorDistancia = distancia;
                 tarefaEncontrada = tarefa;
-                break;
             }
         }
 
@@ -896,13 +979,11 @@ document.addEventListener("DOMContentLoaded", () => {
         // Frascos podem ser coletados aproximando-se deles.
         for (const frasco of objetosColetaveis.frascos) {
             if (!frasco.coletado) {
-                const distancia = Math.hypot(personagem.x - frasco.x, personagem.y - frasco.y);
-                if (distancia < 55) {
+                const distancia = Math.hypot(centroX - frasco.x, centroY - frasco.y);
+                if (distancia < raioColeta) {
                     frasco.coletado = true;
                     const frascosColetados = objetosColetaveis.frascos.filter((item) => item.coletado).length;
-                    const tarefaFrascos = tarefas.find((tarefa) => tarefa.id === "frascos");
-                    tarefaFrascos.progresso = frascosColetados;
-                    feedbackTarefa.textContent = `Frasco coletado (${frascosColetados}/3).`;
+                    mostrarAviso(`Frasco coletado (${frascosColetados}/3).`);
                     return;
                 }
             }
@@ -911,17 +992,17 @@ document.addEventListener("DOMContentLoaded", () => {
         // Cartões de acesso são coletados da mesma forma.
         for (const cartao of objetosColetaveis.cartoes) {
             if (!cartao.coletado) {
-                const distancia = Math.hypot(personagem.x - cartao.x, personagem.y - cartao.y);
-                if (distancia < 55) {
+                const distancia = Math.hypot(centroX - cartao.x, centroY - cartao.y);
+                if (distancia < raioColeta) {
                     cartao.coletado = true;
                     const encontrados = objetosColetaveis.cartoes.filter((item) => item.coletado).length;
-                    feedbackTarefa.textContent = `Cartão coletado (${encontrados}/3).`;
+                    mostrarAviso(`Cartão coletado (${encontrados}/3).`);
                     return;
                 }
             }
         }
 
-        feedbackTarefa.textContent = "Aproxime-se de um objeto ou tarefa e pressione E.";
+        mostrarAviso("Aproxime-se de um objeto ou tarefa e pressione E.");
     }
 
     // Sistema da partida local.
@@ -992,6 +1073,10 @@ document.addEventListener("DOMContentLoaded", () => {
         partida.encerrada = true;
         partida.pausada = true;
 
+        // Partida encerrada não agenda mais eventos.
+        window.clearTimeout(agendamento.timer);
+        agendamento.timer = null;
+
         if (estadoEvento.ativo) finalizarEvento();
 
         document.getElementById("result-title").textContent = vitoria ? "VITÓRIA" : "DERROTA";
@@ -1009,6 +1094,14 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
+        // Um adversário que conclui as seis tarefas vence a partida.
+        const adversarioCompleto = adversarios.find((adversario) => adversario.ativo && adversario.progresso >= 6);
+
+        if (adversarioCompleto) {
+            finalizarPartida(false, `${adversarioCompleto.nome} concluiu as seis tarefas primeiro!`);
+            return;
+        }
+
         const adversariosAtivos = adversarios.filter((adversario) => adversario.ativo);
 
         if (partida.jogadorAtivo && adversariosAtivos.length === 0) {
@@ -1016,6 +1109,8 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
+        // Hoje nada torna jogadorAtivo falso. Esta verificação fica pronta para o
+        // multiplayer: quando o jogador se desconectar, o servidor marcará false.
         if (!partida.jogadorAtivo) {
             finalizarPartida(false, "Você foi eliminado abstratamente da partida.");
             return;
@@ -1039,6 +1134,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function iniciarPartida() {
+        // Encerra o evento ativo primeiro (ele pode ter travado portas).
+        finalizarEvento();
+
         partida.tempoRestante = partida.duracaoInicial;
         partida.ultimaAtualizacao = Date.now();
         partida.pausada = false;
@@ -1048,6 +1146,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
         resultOverlay.hidden = true;
         pauseOverlay.hidden = true;
+        modalTarefa.hidden = true;
+
+        // Personagem volta ao ponto inicial, parado e olhando para baixo.
+        personagem.x = posicaoInicial.x;
+        personagem.y = posicaoInicial.y;
+        personagem.posicaoAnteriorX = posicaoInicial.x;
+        personagem.posicaoAnteriorY = posicaoInicial.y;
+        personagem.direcao = "baixo";
+        personagem.andando = false;
+        personagem.quadroAnimacao = 0;
+        personagem.tempoAnimacao = 0;
+
+        // Frascos e cartões voltam para o mapa.
+        [...objetosColetaveis.frascos, ...objetosColetaveis.cartoes].forEach((objeto) => {
+            objeto.coletado = false;
+        });
+
+        // Portas voltam ao estado original (Reator fechada).
+        portas.forEach((porta) => {
+            porta.aberta = porta.abertaInicial;
+        });
 
         tarefas.forEach((tarefa) => {
             tarefa.concluida = false;
@@ -1059,21 +1178,28 @@ document.addEventListener("DOMContentLoaded", () => {
             adversario.progresso = indice === 1 ? 2 : 1;
         });
 
+        // Recomeça a contagem do próximo evento (cancela o timer antigo).
+        agendarProximoEvento();
+
         atualizarCronometro();
         atualizarListaTarefas();
         atualizarPainelAdversarios();
     }
 
     function pausarPartida() {
-        if (partida.encerrada) return;
+        if (partida.encerrada || partida.pausada) return;
 
         partida.pausada = true;
+        pausarEventos();
         pauseOverlay.hidden = false;
     }
 
     function continuarPartida() {
+        if (partida.encerrada || !partida.pausada) return;
+
         partida.pausada = false;
         partida.ultimaAtualizacao = Date.now();
+        retomarEventos();
         pauseOverlay.hidden = true;
     }
 
@@ -1093,8 +1219,8 @@ document.addEventListener("DOMContentLoaded", () => {
             if (Math.random() < 0.12) {
                 const adversarioElegivel = adversarios.find((adversario) => adversario.ativo);
                 if (adversarioElegivel) {
+                    // Chegar a 6/6 é tratado em verificarResultado() como vitória do adversário.
                     adversarioElegivel.progresso = Math.min(6, adversarioElegivel.progresso + 1);
-                    if (adversarioElegivel.progresso === 6) adversarioElegivel.ativo = false;
                 }
                 atualizarPainelAdversarios();
             }
