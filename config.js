@@ -5,7 +5,7 @@
 // =====================================================================
 
 // Endereço do servidor no Render. Troque pela URL do seu app.
-const URL_SERVIDOR_ONLINE = "https://SEU-APP.onrender.com";
+const URL_SERVIDOR_ONLINE = "https://laboratory-chaos.onrender.com";
 
 // Escolhe o servidor conforme onde a página está aberta:
 // - GitHub Pages (*.github.io): usa o servidor do Render;
