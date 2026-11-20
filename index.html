@@ -73,10 +73,36 @@
                 <label for="speed-control">
                     Velocidade
                     <input id="speed-control" type="range" min="80" max="260" value="160">
+                    <strong id="speed-value">160</strong>
                 </label>
             </div>
 
-            <canvas id="game-canvas" width="800" height="480" aria-label="Mapa top-down do laboratório"></canvas>
+            <!-- Moldura do canvas: os overlays de pausa e resultado cobrem só o mapa. -->
+            <div class="canvas-frame">
+                <canvas id="game-canvas" width="800" height="480" aria-label="Mapa top-down do laboratório"></canvas>
+
+                <div class="match-overlay" id="pause-overlay" hidden>
+                    <section class="match-overlay-window">
+                        <h2>JOGO PAUSADO</h2>
+                        <p>O cronômetro e os eventos estão suspensos.</p>
+                        <div class="overlay-actions">
+                            <button class="back-button" id="resume-button" type="button">CONTINUAR</button>
+                            <button class="back-button" id="pause-menu-button" type="button">VOLTAR AO MENU</button>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="match-overlay" id="result-overlay" hidden>
+                    <section class="match-overlay-window">
+                        <h2 id="result-title">RESULTADO</h2>
+                        <p id="result-message"></p>
+                        <div class="overlay-actions">
+                            <button class="back-button" id="restart-button" type="button">JOGAR NOVAMENTE</button>
+                            <button class="back-button" id="result-menu-button" type="button">VOLTAR AO MENU</button>
+                        </div>
+                    </section>
+                </div>
+            </div>
 
             <div class="match-hud">
                 <div>
@@ -128,29 +154,6 @@
                 </section>
             </div>
 
-            <!-- Telas de estado da partida. -->
-            <div class="match-overlay" id="pause-overlay" hidden>
-                <section class="match-overlay-window">
-                    <h2>JOGO PAUSADO</h2>
-                    <p>O cronômetro e os eventos estão suspensos.</p>
-                    <div class="overlay-actions">
-                        <button class="back-button" id="resume-button" type="button">CONTINUAR</button>
-                        <button class="back-button" id="pause-menu-button" type="button">VOLTAR AO MENU</button>
-                    </div>
-                </section>
-            </div>
-
-            <div class="match-overlay" id="result-overlay" hidden>
-                <section class="match-overlay-window">
-                    <h2 id="result-title">RESULTADO</h2>
-                    <p id="result-message"></p>
-                    <div class="overlay-actions">
-                        <button class="back-button" id="restart-button" type="button">JOGAR NOVAMENTE</button>
-                        <button class="back-button" id="result-menu-button" type="button">VOLTAR AO MENU</button>
-                    </div>
-                </section>
-            </div>
-
             <button class="back-button" id="pause-button" type="button">Ⅱ PAUSAR</button>
             <button class="back-button" data-screen="menu-screen">← VOLTAR AO MENU</button>
         </section>
@@ -162,7 +165,14 @@
             <h2>COMO JOGAR</h2>
             <div class="content-card how-to-card">
                 <h3>Objetivo</h3>
-                <p>Explore o laboratório, encontre os equipamentos perdidos e evite os experimentos que saíram do controle.</p>
+                <p>Conclua as 6 tarefas do laboratório antes dos adversários. Você tem 5 minutos!</p>
+                <ul>
+                    <li>Ande com <strong>W A S D</strong> ou com as <strong>setas</strong>.</li>
+                    <li>Pare perto de uma marca amarela e aperte <strong>E</strong> para abrir a tarefa.</li>
+                    <li>Aperte <strong>E</strong> perto de frascos e cartões para coletá-los: a tarefa dos frascos precisa de 3 frascos e o protocolo precisa de 3 cartões.</li>
+                    <li>Eventos aleatórios atrapalham: apagão, vazamento de gás, portas travadas e alarme.</li>
+                    <li>Se o tempo acabar, vence quem tiver concluído mais tarefas.</li>
+                </ul>
                 <div class="tip">
                     <span>◆</span>
                     Complete cada missão sem deixar o caos aumentar!

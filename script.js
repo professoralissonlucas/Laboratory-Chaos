@@ -1,3 +1,20 @@
+// =====================================================================
+// LABORATORY CHAOS — lógica do jogo
+//
+// Tudo roda dentro de um único DOMContentLoaded (sem módulos ES), para
+// funcionar abrindo o index.html direto no navegador.
+//
+// Seções:
+//   1. Navegação e configurações
+//   2. Personagem
+//   3. Mapa
+//   4. Eventos
+//   5. Tarefas
+//   6. Partida
+//   7. Salas
+//   8. Loop principal e inicialização
+// =====================================================================
+
 // Aguarda o carregamento completo do HTML antes de executar o código.
 document.addEventListener("DOMContentLoaded", () => {
     // Procura o elemento que contém o título da tela inicial.
@@ -8,7 +25,10 @@ document.addEventListener("DOMContentLoaded", () => {
         console.log(`${titulo.textContent} carregado com sucesso.`);
     }
 
-    // Este arquivo controla a navegação entre as telas do menu principal.
+    // =================================================================
+    // 1. NAVEGAÇÃO E CONFIGURAÇÕES
+    // =================================================================
+
     // Seleciona todos os botões que possuem o atributo data-screen.
     const botoesDeTela = document.querySelectorAll("[data-screen]");
 
@@ -39,21 +59,28 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    // Atualiza o texto da configuração de volume enquanto o usuário move o controle.
+    // Controles da tela de configurações (usados também pelo som do alarme).
     const controleVolume = document.getElementById("volume");
     const textoVolume = document.getElementById("volume-value");
+    const caixaEfeitos = document.getElementById("effects");
 
+    // Atualiza o texto do volume enquanto o usuário move o controle.
     if (controleVolume && textoVolume) {
         controleVolume.addEventListener("input", () => {
             textoVolume.textContent = `${controleVolume.value}%`;
         });
     }
 
-    // Sistema simples de personagens e movimentação na tela de teste.
+    // =================================================================
+    // 2. PERSONAGEM
+    // =================================================================
+
     const canvas = document.getElementById("game-canvas");
     const contexto = canvas ? canvas.getContext("2d") : null;
     const seletorPersonagem = document.getElementById("character-select");
     const controleVelocidade = document.getElementById("speed-control");
+    const textoVelocidade = document.getElementById("speed-value");
+    const nomeJogador = document.getElementById("player-name");
 
     // Cinco personagens 16 por 16 pixels com cores e estilos diferentes.
     const personagens = [
@@ -101,6 +128,130 @@ document.addEventListener("DOMContentLoaded", () => {
     window.addEventListener("keyup", (evento) => {
         teclasPressionadas[evento.key.toLowerCase()] = false;
     });
+
+    // Troca o personagem desenhado e o nome mostrado no HUD.
+    if (seletorPersonagem) {
+        seletorPersonagem.addEventListener("change", () => {
+            const nomes = ["Estudante Azul", "Estudante Rosa", "Estudante Roxo", "Estudante Amarelo", "Estudante Cinza"];
+            if (nomeJogador) nomeJogador.textContent = nomes[Number(seletorPersonagem.value)];
+            personagem.personagemAtual = Number(seletorPersonagem.value);
+        });
+    }
+
+    // Liga o slider de velocidade ao personagem e mostra o valor.
+    function aplicarVelocidade() {
+        if (!controleVelocidade) return;
+        personagem.velocidade = Number(controleVelocidade.value);
+        if (textoVelocidade) textoVelocidade.textContent = controleVelocidade.value;
+    }
+
+    if (controleVelocidade) {
+        controleVelocidade.addEventListener("input", aplicarVelocidade);
+    }
+
+    // Desenha um personagem em uma grade lógica de 16 por 16 pixels.
+    function desenharPersonagem() {
+        const dados = personagens[personagem.personagemAtual];
+        const escala = personagem.tamanho / 16;
+
+        contexto.save();
+
+        // Virar o desenho horizontalmente muda a direção esquerda/direita.
+        if (personagem.direcao === "esquerda") {
+            contexto.translate(personagem.x + personagem.tamanho, personagem.y);
+            contexto.scale(-1, 1);
+        } else {
+            contexto.translate(personagem.x, personagem.y);
+        }
+
+        // Tremor vertical de 1 pixel durante os passos.
+        const salto = personagem.andando && personagem.quadroAnimacao === 1 ? escala : 0;
+
+        // Sombra simples.
+        contexto.fillStyle = "#202640";
+        contexto.fillRect(3 * escala, 14 * escala + salto, 10 * escala, 2 * escala);
+
+        // Pernas.
+        contexto.fillStyle = "#30364f";
+        const passoEsquerdo = personagem.andando && personagem.quadroAnimacao === 1 ? 1 : 0;
+        const passoDireito = personagem.andando && personagem.quadroAnimacao === 0 ? 1 : 0;
+        contexto.fillRect((3 - passoEsquerdo) * escala, 11 * escala, 4 * escala, 3 * escala);
+        contexto.fillRect((9 + passoDireito) * escala, 11 * escala, 4 * escala, 3 * escala);
+
+        // Corpo e jaleco.
+        contexto.fillStyle = dados.roupa;
+        contexto.fillRect(3 * escala, 6 * escala, 10 * escala, 6 * escala);
+        contexto.fillStyle = dados.detalhe;
+        contexto.fillRect(7 * escala, 7 * escala, 2 * escala, 5 * escala);
+
+        // Braços.
+        contexto.fillStyle = "#f1c27d";
+        contexto.fillRect(1 * escala, 7 * escala, 2 * escala, 4 * escala);
+        contexto.fillRect(13 * escala, 7 * escala, 2 * escala, 4 * escala);
+
+        // Cabeça e cabelo.
+        contexto.fillStyle = "#f1c27d";
+        contexto.fillRect(4 * escala, 2 * escala, 8 * escala, 5 * escala);
+        contexto.fillStyle = dados.cabelo;
+        contexto.fillRect(3 * escala, 1 * escala, 10 * escala, 3 * escala);
+        contexto.fillRect(3 * escala, 3 * escala, 2 * escala, 2 * escala);
+
+        // Olhos que mudam conforme a direção inferior/superior.
+        contexto.fillStyle = "#171a31";
+        if (personagem.direcao === "cima") {
+            contexto.fillRect(6 * escala, 4 * escala, 1 * escala, 1 * escala);
+        } else {
+            contexto.fillRect(10 * escala, 5 * escala, 1 * escala, 1 * escala);
+        }
+
+        contexto.restore();
+    }
+
+    // Atualiza posição e animação usando o tempo real entre dois quadros.
+    function atualizarPersonagem(deltaTempo) {
+        let horizontal = 0;
+        let vertical = 0;
+
+        if (teclasPressionadas.w || teclasPressionadas.arrowup) vertical -= 1;
+        if (teclasPressionadas.s || teclasPressionadas.arrowdown) vertical += 1;
+        if (teclasPressionadas.a || teclasPressionadas.arrowleft) horizontal -= 1;
+        if (teclasPressionadas.d || teclasPressionadas.arrowright) horizontal += 1;
+
+        personagem.andando = horizontal !== 0 || vertical !== 0;
+
+        if (horizontal !== 0 || vertical !== 0) {
+            // Guarda a posição segura antes de tentar mover.
+            personagem.posicaoAnteriorX = personagem.x;
+            personagem.posicaoAnteriorY = personagem.y;
+
+            // Normaliza a diagonal para não andar mais rápido nessas direções.
+            const tamanhoDiagonal = Math.sqrt(horizontal * horizontal + vertical * vertical);
+            horizontal /= tamanhoDiagonal;
+            vertical /= tamanhoDiagonal;
+
+            personagem.x += horizontal * personagem.velocidade * deltaTempo;
+            personagem.y += vertical * personagem.velocidade * deltaTempo;
+
+            if (horizontal < 0) personagem.direcao = "esquerda";
+            if (horizontal > 0) personagem.direcao = "direita";
+            if (vertical < 0) personagem.direcao = "cima";
+            if (vertical > 0) personagem.direcao = "baixo";
+
+            personagem.tempoAnimacao += deltaTempo;
+            if (personagem.tempoAnimacao > 0.14) {
+                personagem.quadroAnimacao = personagem.quadroAnimacao === 0 ? 1 : 0;
+                personagem.tempoAnimacao = 0;
+            }
+        }
+
+        // Impede que o personagem saia da área do Canvas.
+        personagem.x = Math.max(0, Math.min(canvas.width - personagem.tamanho, personagem.x));
+        personagem.y = Math.max(0, Math.min(canvas.height - personagem.tamanho, personagem.y));
+    }
+
+    // =================================================================
+    // 3. MAPA
+    // =================================================================
 
     // Cada retângulo representa uma parede ou área sólida do mapa.
     // Os números correspondem a posições em pixels dentro do Canvas.
@@ -184,6 +335,146 @@ document.addEventListener("DOMContentLoaded", () => {
         { x: 704, y: 320, largura: 32, altura: 80, tipo: "equipamento" }
     ];
 
+    // Confere colisão com paredes, obstáculos e portas fechadas.
+    function checarColisao() {
+        // Verifica se o personagem toca qualquer área sólida.
+        function estaSobreposto(retangulo) {
+            return (
+                personagem.x < retangulo.x + retangulo.largura &&
+                personagem.x + personagem.tamanho > retangulo.x &&
+                personagem.y < retangulo.y + retangulo.altura &&
+                personagem.y + personagem.tamanho > retangulo.y
+            );
+        }
+
+        // Para verificar qualquer colisão no mapa.
+        const paredeColidida = paredes.some(estaSobreposto);
+        const obstaculoColidido = obstaculos.some(estaSobreposto);
+
+        // O gás ativo funciona como uma área temporariamente bloqueada.
+        const gasColidido = estadoEvento.ativo === "gas" &&
+            estadoEvento.gas && estaSobreposto(estadoEvento.gas);
+
+        const portaFechada = portas.find((porta) => {
+            return !porta.aberta && estaSobreposto(porta);
+        });
+
+        // Se houver colisão, a posição anterior é recuperada.
+        if (paredeColidida || obstaculoColidido || gasColidido || portaFechada) {
+            personagem.x = personagem.posicaoAnteriorX;
+            personagem.y = personagem.posicaoAnteriorY;
+        }
+
+        return !paredeColidida && !obstaculoColidido && !gasColidido && !portaFechada;
+    }
+
+    // Desenha o mapa completo do laboratório e seus objetos.
+    function desenharFundo() {
+        contexto.fillStyle = "#343d68";
+        contexto.fillRect(0, 0, canvas.width, canvas.height);
+
+        for (let linha = 0; linha < 8; linha += 1) {
+            for (let coluna = 0; coluna < 13; coluna += 1) {
+                contexto.fillStyle = (linha + coluna) % 2 === 0 ? "#404a78" : "#394268";
+                contexto.fillRect(coluna * 64, linha * 64, 64, 64);
+            }
+        }
+
+        // Desenha cada parede em cinza com uma borda azul.
+        for (const parede of paredes) {
+            contexto.fillStyle = "#777f98";
+            contexto.fillRect(parede.x, parede.y, parede.largura, parede.altura);
+            contexto.fillStyle = "#9da5b8";
+            contexto.fillRect(parede.x, parede.y, parede.largura, 4);
+        }
+
+        // Desenha portas rosas quando abertas e amarelas quando fechadas.
+        for (const porta of portas) {
+            contexto.fillStyle = porta.aberta ? "#ed87b8" : "#f4d35e";
+            contexto.fillRect(porta.x, porta.y, porta.largura, porta.altura);
+            contexto.fillStyle = "#1d2440";
+            contexto.fillRect(porta.x + 12, porta.y + 4, 8, 8);
+        }
+
+        // Desenha os objetos decorativos conforme seu tipo.
+        for (const objeto of obstaculos) {
+            if (objeto.tipo === "computador") {
+                contexto.fillStyle = "#1d2440";
+                contexto.fillRect(objeto.x, objeto.y, objeto.largura, objeto.altura);
+                contexto.fillStyle = "#62c9df";
+                contexto.fillRect(objeto.x + 8, objeto.y + 6, objeto.largura - 16, objeto.altura - 16);
+            } else if (objeto.tipo === "reator") {
+                contexto.fillStyle = "#626b86";
+                contexto.fillRect(objeto.x, objeto.y, objeto.largura, objeto.altura);
+                contexto.fillStyle = "#f4d35e";
+                contexto.fillRect(objeto.x + 20, objeto.y + 20, 24, 24);
+                contexto.fillStyle = "#ed87b8";
+                contexto.fillRect(objeto.x + 28, objeto.y + 28, 8, 8);
+            } else {
+                contexto.fillStyle = objeto.tipo === "armario" ? "#8b66b5" : "#bda765";
+                contexto.fillRect(objeto.x, objeto.y, objeto.largura, objeto.altura);
+                contexto.fillStyle = "#1d2440";
+                contexto.fillRect(objeto.x + 6, objeto.y + 6, objeto.largura - 12, 4);
+
+                if (objeto.tipo === "equipamento") {
+                    contexto.fillStyle = "#62c9df";
+                    contexto.fillRect(objeto.x + 12, objeto.y + 16, objeto.largura - 24, 10);
+                }
+            }
+        }
+
+        // Marcadores das seis tarefas no mapa.
+        tarefas.forEach((tarefa) => {
+            contexto.fillStyle = tarefa.concluida ? "#4e675a" : "#f4d35e";
+            contexto.fillRect(tarefa.x - 10, tarefa.y - 10, 20, 20);
+            contexto.fillStyle = "#171a31";
+            contexto.fillRect(tarefa.x - 3, tarefa.y - 3, 6, 6);
+        });
+
+        // Frascos e cartões ainda não coletados aparecem no mapa.
+        objetosColetaveis.frascos.forEach((frasco) => {
+            if (!frasco.coletado) {
+                contexto.fillStyle = "#ed87b8";
+                contexto.fillRect(frasco.x - 8, frasco.y - 8, 16, 16);
+                contexto.fillStyle = "#62c9df";
+                contexto.fillRect(frasco.x - 4, frasco.y - 12, 8, 8);
+            }
+        });
+
+        objetosColetaveis.cartoes.forEach((cartao) => {
+            if (!cartao.coletado) {
+                contexto.fillStyle = "#f4d35e";
+                contexto.fillRect(cartao.x - 10, cartao.y - 7, 20, 14);
+                contexto.fillStyle = "#8b66b5";
+                contexto.fillRect(cartao.x - 6, cartao.y - 3, 12, 6);
+            }
+        });
+
+        // Nuvem visual de gás fictício durante o evento.
+        if (estadoEvento.ativo === "gas" && estadoEvento.gas) {
+            const gas = estadoEvento.gas;
+            contexto.fillStyle = "rgba(139, 102, 181, 0.72)";
+            contexto.fillRect(gas.x, gas.y, gas.largura, gas.altura);
+
+            contexto.fillStyle = "rgba(237, 135, 184, 0.55)";
+            for (let circulo = 0; circulo < 5; circulo += 1) {
+                contexto.beginPath();
+                contexto.arc(gas.x + 25 + circulo * 24, gas.y + 50, 18, 0, Math.PI * 2);
+                contexto.fill();
+            }
+        }
+
+        // Escurecimento temporário do apagão.
+        if (estadoEvento.ativo === "apagao") {
+            contexto.fillStyle = "rgba(9, 11, 22, 0.78)";
+            contexto.fillRect(0, 0, canvas.width, canvas.height);
+        }
+    }
+
+    // =================================================================
+    // 4. EVENTOS
+    // =================================================================
+
     // Configuração dos eventos aleatórios da partida.
     const configuracaoEventos = {
         intervaloMinimo: 18000,
@@ -222,24 +513,33 @@ document.addEventListener("DOMContentLoaded", () => {
         restanteNaPausa: null
     };
 
+    // Um único contexto de áudio, criado no primeiro bip.
+    let audioContexto = null;
+
+    // Toca um bip curto respeitando o volume e a opção de efeitos sonoros.
     function tocarAlarme() {
+        const volume = controleVolume ? Number(controleVolume.value) / 100 : 0.5;
+        const efeitosLigados = caixaEfeitos ? caixaEfeitos.checked : true;
+        if (!efeitosLigados || volume === 0) return;
+
         try {
-            const audioContexto = new (window.AudioContext || window.webkitAudioContext)();
+            if (!audioContexto) {
+                audioContexto = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioContexto.state === "suspended") audioContexto.resume();
+
             const oscilador = audioContexto.createOscillator();
             const ganho = audioContexto.createGain();
 
             oscilador.type = "square";
             oscilador.frequency.value = 660;
-            ganho.gain.value = 0.05;
+            // Volume de 50% equivale ao ganho original de 0,05.
+            ganho.gain.value = 0.1 * volume;
 
             oscilador.connect(ganho);
             ganho.connect(audioContexto.destination);
             oscilador.start();
-
-            window.setTimeout(() => {
-                oscilador.stop();
-                audioContexto.close();
-            }, configuracaoEventos.intervaloAlarme);
+            oscilador.stop(audioContexto.currentTime + configuracaoEventos.intervaloAlarme / 1000);
         } catch (erro) {
             console.log("O navegador não permitiu reproduzir o som de teste.");
         }
@@ -426,6 +726,10 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    // =================================================================
+    // 5. TAREFAS
+    // =================================================================
+
     // Sistema das seis tarefas da partida.
     const tarefas = [
         { id: "computador", nome: "Reiniciar o computador", categoria: "FÁCIL", concluida: false, progresso: 0, total: 3, x: 176, y: 64 },
@@ -486,6 +790,22 @@ document.addEventListener("DOMContentLoaded", () => {
         feedbackTarefa.textContent = "Erro! Observe a ordem e tente novamente.";
     }
 
+    // Pisca o botão com a classe .wrong para indicar erro.
+    function marcarErro(botao) {
+        botao.classList.add("wrong");
+        window.setTimeout(() => botao.classList.remove("wrong"), 450);
+    }
+
+    // Ao reabrir uma tarefa, marca como certos os passos já feitos.
+    function marcarPassosFeitos(passo) {
+        conteudoTarefa.querySelectorAll(".task-option").forEach((botao, indice) => {
+            if (indice < passo) {
+                botao.className = "task-option correct";
+                botao.disabled = true;
+            }
+        });
+    }
+
     function barraProgresso(tarefa) {
         conteudoTarefa.querySelectorAll(".task-progress-bar").forEach((barra) => barra.remove());
         conteudoTarefa.insertAdjacentHTML("beforeend",
@@ -508,274 +828,6 @@ document.addEventListener("DOMContentLoaded", () => {
         conteudoTarefa.appendChild(grupo);
     }
 
-    // Confere colisão com paredes, obstáculos e portas fechadas.
-    function checarColisao() {
-        // Verifica se o personagem toca qualquer área sólida.
-        function estaSobreposto(retangulo) {
-            return (
-                personagem.x < retangulo.x + retangulo.largura &&
-                personagem.x + personagem.tamanho > retangulo.x &&
-                personagem.y < retangulo.y + retangulo.altura &&
-                personagem.y + personagem.tamanho > retangulo.y
-            );
-        }
-
-        // Para verificar qualquer colisão no mapa.
-        const paredeColidida = paredes.some(estaSobreposto);
-        const obstaculoColidido = obstaculos.some(estaSobreposto);
-
-        // O gás ativo funciona como uma área temporariamente bloqueada.
-        const gasColidido = estadoEvento.ativo === "gas" &&
-            estadoEvento.gas && estaSobreposto(estadoEvento.gas);
-
-        const portaFechada = portas.find((porta) => {
-            return !porta.aberta && estaSobreposto(porta);
-        });
-
-        // Se houver colisão, a posição anterior é recuperada.
-        if (paredeColidida || obstaculoColidido || gasColidido || portaFechada) {
-            personagem.x = personagem.posicaoAnteriorX;
-            personagem.y = personagem.posicaoAnteriorY;
-        }
-
-        return !paredeColidida && !obstaculoColidido && !gasColidido && !portaFechada;
-    }
-
-    // Desenha o mapa completo do laboratório e seus objetos.
-    function desenharFundo() {
-        contexto.fillStyle = "#343d68";
-        contexto.fillRect(0, 0, canvas.width, canvas.height);
-
-        for (let linha = 0; linha < 8; linha += 1) {
-            for (let coluna = 0; coluna < 13; coluna += 1) {
-                contexto.fillStyle = (linha + coluna) % 2 === 0 ? "#404a78" : "#394268";
-                contexto.fillRect(coluna * 64, linha * 64, 64, 64);
-            }
-        }
-
-        // Desenha cada parede em cinza com uma borda azul.
-        for (const parede of paredes) {
-            contexto.fillStyle = "#777f98";
-            contexto.fillRect(parede.x, parede.y, parede.largura, parede.altura);
-            contexto.fillStyle = "#9da5b8";
-            contexto.fillRect(parede.x, parede.y, parede.largura, 4);
-        }
-
-        // Desenha portas rosas quando abertas e amarelas quando fechadas.
-        for (const porta of portas) {
-            contexto.fillStyle = porta.aberta ? "#ed87b8" : "#f4d35e";
-            contexto.fillRect(porta.x, porta.y, porta.largura, porta.altura);
-            contexto.fillStyle = "#1d2440";
-            contexto.fillRect(porta.x + 12, porta.y + 4, 8, 8);
-        }
-
-        // Desenha os objetos decorativos conforme seu tipo.
-        for (const objeto of obstaculos) {
-            if (objeto.tipo === "computador") {
-                contexto.fillStyle = "#1d2440";
-                contexto.fillRect(objeto.x, objeto.y, objeto.largura, objeto.altura);
-                contexto.fillStyle = "#62c9df";
-                contexto.fillRect(objeto.x + 8, objeto.y + 6, objeto.largura - 16, objeto.altura - 16);
-            } else if (objeto.tipo === "reator") {
-                contexto.fillStyle = "#626b86";
-                contexto.fillRect(objeto.x, objeto.y, objeto.largura, objeto.altura);
-                contexto.fillStyle = "#f4d35e";
-                contexto.fillRect(objeto.x + 20, objeto.y + 20, 24, 24);
-                contexto.fillStyle = "#ed87b8";
-                contexto.fillRect(objeto.x + 28, objeto.y + 28, 8, 8);
-            } else {
-                contexto.fillStyle = objeto.tipo === "armario" ? "#8b66b5" : "#bda765";
-                contexto.fillRect(objeto.x, objeto.y, objeto.largura, objeto.altura);
-                contexto.fillStyle = "#1d2440";
-                contexto.fillRect(objeto.x + 6, objeto.y + 6, objeto.largura - 12, 4);
-
-                if (objeto.tipo === "equipamento") {
-                    contexto.fillStyle = "#62c9df";
-                    contexto.fillRect(objeto.x + 12, objeto.y + 16, objeto.largura - 24, 10);
-                }
-            }
-        }
-
-        // Marcadores das seis tarefas no mapa.
-        tarefas.forEach((tarefa) => {
-            contexto.fillStyle = tarefa.concluida ? "#4e675a" : "#f4d35e";
-            contexto.fillRect(tarefa.x - 10, tarefa.y - 10, 20, 20);
-            contexto.fillStyle = "#171a31";
-            contexto.fillRect(tarefa.x - 3, tarefa.y - 3, 6, 6);
-        });
-
-        // Frascos e cartões ainda não coletados aparecem no mapa.
-        objetosColetaveis.frascos.forEach((frasco) => {
-            if (!frasco.coletado) {
-                contexto.fillStyle = "#ed87b8";
-                contexto.fillRect(frasco.x - 8, frasco.y - 8, 16, 16);
-                contexto.fillStyle = "#62c9df";
-                contexto.fillRect(frasco.x - 4, frasco.y - 12, 8, 8);
-            }
-        });
-
-        objetosColetaveis.cartoes.forEach((cartao) => {
-            if (!cartao.coletado) {
-                contexto.fillStyle = "#f4d35e";
-                contexto.fillRect(cartao.x - 10, cartao.y - 7, 20, 14);
-                contexto.fillStyle = "#8b66b5";
-                contexto.fillRect(cartao.x - 6, cartao.y - 3, 12, 6);
-            }
-        });
-
-        // Nuvem visual de gás fictício durante o evento.
-        if (estadoEvento.ativo === "gas" && estadoEvento.gas) {
-            const gas = estadoEvento.gas;
-            contexto.fillStyle = "rgba(139, 102, 181, 0.72)";
-            contexto.fillRect(gas.x, gas.y, gas.largura, gas.altura);
-
-            contexto.fillStyle = "rgba(237, 135, 184, 0.55)";
-            for (let circulo = 0; circulo < 5; circulo += 1) {
-                contexto.beginPath();
-                contexto.arc(gas.x + 25 + circulo * 24, gas.y + 50, 18, 0, Math.PI * 2);
-                contexto.fill();
-            }
-        }
-
-        // Escurecimento temporário do apagão.
-        if (estadoEvento.ativo === "apagao") {
-            contexto.fillStyle = "rgba(9, 11, 22, 0.78)";
-            contexto.fillRect(0, 0, canvas.width, canvas.height);
-        }
-    }
-
-    // Desenha um personagem em uma grade lógica de 16 por 16 pixels.
-    function desenharPersonagem() {
-        const dados = personagens[personagem.personagemAtual];
-        const escala = personagem.tamanho / 16;
-
-        contexto.save();
-
-        // Virar o desenho horizontalmente muda a direção esquerda/direita.
-        if (personagem.direcao === "esquerda") {
-            contexto.translate(personagem.x + personagem.tamanho, personagem.y);
-            contexto.scale(-1, 1);
-        } else {
-            contexto.translate(personagem.x, personagem.y);
-        }
-
-        // Tremor vertical de 1 pixel durante os passos.
-        const salto = personagem.andando && personagem.quadroAnimacao === 1 ? escala : 0;
-
-        // Sombra simples.
-        contexto.fillStyle = "#202640";
-        contexto.fillRect(3 * escala, 14 * escala + salto, 10 * escala, 2 * escala);
-
-        // Pernas.
-        contexto.fillStyle = "#30364f";
-        const passoEsquerdo = personagem.andando && personagem.quadroAnimacao === 1 ? 1 : 0;
-        const passoDireito = personagem.andando && personagem.quadroAnimacao === 0 ? 1 : 0;
-        contexto.fillRect((3 - passoEsquerdo) * escala, 11 * escala, 4 * escala, 3 * escala);
-        contexto.fillRect((9 + passoDireito) * escala, 11 * escala, 4 * escala, 3 * escala);
-
-        // Corpo e jaleco.
-        contexto.fillStyle = dados.roupa;
-        contexto.fillRect(3 * escala, 6 * escala, 10 * escala, 6 * escala);
-        contexto.fillStyle = dados.detalhe;
-        contexto.fillRect(7 * escala, 7 * escala, 2 * escala, 5 * escala);
-
-        // Braços.
-        contexto.fillStyle = "#f1c27d";
-        contexto.fillRect(1 * escala, 7 * escala, 2 * escala, 4 * escala);
-        contexto.fillRect(13 * escala, 7 * escala, 2 * escala, 4 * escala);
-
-        // Cabeça e cabelo.
-        contexto.fillStyle = "#f1c27d";
-        contexto.fillRect(4 * escala, 2 * escala, 8 * escala, 5 * escala);
-        contexto.fillStyle = dados.cabelo;
-        contexto.fillRect(3 * escala, 1 * escala, 10 * escala, 3 * escala);
-        contexto.fillRect(3 * escala, 3 * escala, 2 * escala, 2 * escala);
-
-        // Olhos que mudam conforme a direção inferior/superior.
-        contexto.fillStyle = "#171a31";
-        if (personagem.direcao === "cima") {
-            contexto.fillRect(6 * escala, 4 * escala, 1 * escala, 1 * escala);
-        } else {
-            contexto.fillRect(10 * escala, 5 * escala, 1 * escala, 1 * escala);
-        }
-
-        contexto.restore();
-    }
-
-    // Atualiza posição e animação usando o tempo real entre dois quadros.
-    function atualizarPersonagem(deltaTempo) {
-        let horizontal = 0;
-        let vertical = 0;
-
-        if (teclasPressionadas.w || teclasPressionadas.arrowup) vertical -= 1;
-        if (teclasPressionadas.s || teclasPressionadas.arrowdown) vertical += 1;
-        if (teclasPressionadas.a || teclasPressionadas.arrowleft) horizontal -= 1;
-        if (teclasPressionadas.d || teclasPressionadas.arrowright) horizontal += 1;
-
-        personagem.andando = horizontal !== 0 || vertical !== 0;
-
-        if (horizontal !== 0 || vertical !== 0) {
-            // Guarda a posição segura antes de tentar mover.
-            personagem.posicaoAnteriorX = personagem.x;
-            personagem.posicaoAnteriorY = personagem.y;
-
-            // Normaliza a diagonal para não andar mais rápido nessas direções.
-            const tamanhoDiagonal = Math.sqrt(horizontal * horizontal + vertical * vertical);
-            horizontal /= tamanhoDiagonal;
-            vertical /= tamanhoDiagonal;
-
-            personagem.x += horizontal * personagem.velocidade * deltaTempo;
-            personagem.y += vertical * personagem.velocidade * deltaTempo;
-
-            if (horizontal < 0) personagem.direcao = "esquerda";
-            if (horizontal > 0) personagem.direcao = "direita";
-            if (vertical < 0) personagem.direcao = "cima";
-            if (vertical > 0) personagem.direcao = "baixo";
-
-            personagem.tempoAnimacao += deltaTempo;
-            if (personagem.tempoAnimacao > 0.14) {
-                personagem.quadroAnimacao = personagem.quadroAnimacao === 0 ? 1 : 0;
-                personagem.tempoAnimacao = 0;
-            }
-        }
-
-        // Impede que o personagem saia da área do Canvas.
-        personagem.x = Math.max(0, Math.min(canvas.width - personagem.tamanho, personagem.x));
-        personagem.y = Math.max(0, Math.min(canvas.height - personagem.tamanho, personagem.y));
-    }
-
-    let ultimoTempo = 0;
-
-    function executarJogo(tempoAtual) {
-        if (!contexto) return;
-
-        const deltaTempo = (tempoAtual - ultimoTempo) / 1000;
-        ultimoTempo = tempoAtual;
-
-        if (telas[0] && document.getElementById("play-screen").classList.contains("active")) {
-            // Pausado: nada se move, só o desenho continua.
-            if (!partida.pausada) {
-                atualizarPartida();
-                atualizarEvento();
-                atualizarPersonagem(Math.min(deltaTempo, 0.05));
-                // Resolve a colisão antes de desenhar, para não haver quadro sobreposto.
-                checarColisao();
-            }
-            desenharFundo();
-            desenharPersonagem();
-        }
-
-        requestAnimationFrame(executarJogo);
-    }
-
-    if (contexto) {
-        desenharFundo();
-        desenharPersonagem();
-        requestAnimationFrame(executarJogo);
-    }
-
-    console.log("Menu principal do Laboratory Chaos carregado com sucesso.");
-
     function interfaceComputador(tarefa) {
         const sequencia = ["ENERGIA", "MEMÓRIA", "REDE"];
         let passo = tarefa.progresso;
@@ -797,10 +849,12 @@ document.addEventListener("DOMContentLoaded", () => {
                     item.className = "task-option";
                     item.disabled = false;
                 });
+                marcarErro(botao);
                 erroTarefa();
             }
             barraProgresso(tarefa);
         });
+        marcarPassosFeitos(passo);
         barraProgresso(tarefa);
     }
 
@@ -816,6 +870,7 @@ document.addEventListener("DOMContentLoaded", () => {
             // Só aceita a sequência depois de coletar todos os frascos.
             const frascosColetados = contarFrascos();
             if (frascosColetados < tarefa.total) {
+                marcarErro(botao);
                 feedbackTarefa.textContent = `Faltam ${tarefa.total - frascosColetados} frascos para organizar.`;
                 return;
             }
@@ -828,10 +883,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 feedbackTarefa.textContent = `${passo}/${tarefa.total} frascos organizados.`;
                 if (passo === tarefa.total) concluirTarefa(tarefa);
             } else {
+                marcarErro(botao);
                 erroTarefa();
             }
             barraProgresso(tarefa);
         });
+        marcarPassosFeitos(passo);
         barraProgresso(tarefa);
     }
 
@@ -850,10 +907,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 feedbackTarefa.textContent = `${passo}/${tarefa.total} cabos conectados.`;
                 if (passo === tarefa.total) concluirTarefa(tarefa);
             } else {
+                marcarErro(botao);
                 erroTarefa();
             }
             barraProgresso(tarefa);
         });
+        marcarPassosFeitos(passo);
         barraProgresso(tarefa);
     }
 
@@ -875,10 +934,12 @@ document.addEventListener("DOMContentLoaded", () => {
                     portas.forEach((porta) => porta.aberta = true);
                 }
             } else {
+                marcarErro(botao);
                 erroTarefa();
             }
             barraProgresso(tarefa);
         });
+        marcarPassosFeitos(passo);
         barraProgresso(tarefa);
     }
 
@@ -896,10 +957,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 feedbackTarefa.textContent = `${passo}/${tarefa.total} controles ajustados.`;
                 if (passo === tarefa.total) concluirTarefa(tarefa);
             } else {
+                marcarErro(botao);
                 erroTarefa();
             }
             barraProgresso(tarefa);
         });
+        marcarPassosFeitos(passo);
         barraProgresso(tarefa);
     }
 
@@ -909,7 +972,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const botaoConfirmar = document.createElement("button");
         botaoConfirmar.type = "button";
-        botaoConfirmar.className = "task-option";
+        // Com os 3 cartões, o botão fica destacado (.selected) indicando que está pronto.
+        botaoConfirmar.className = tarefa.progresso === tarefa.total ? "task-option selected" : "task-option";
         botaoConfirmar.textContent = "CONFIRMAR";
 
         botaoConfirmar.addEventListener("click", () => {
@@ -917,8 +981,10 @@ document.addEventListener("DOMContentLoaded", () => {
             tarefa.progresso = objetosColetaveis.cartoes.filter((cartao) => cartao.coletado).length;
 
             if (tarefa.progresso === tarefa.total) {
+                botaoConfirmar.className = "task-option correct";
                 concluirTarefa(tarefa);
             } else {
+                marcarErro(botaoConfirmar);
                 erroTarefa();
                 feedbackTarefa.textContent = `Faltam ${tarefa.total - tarefa.progresso} cartões de acesso.`;
             }
@@ -947,8 +1013,6 @@ document.addEventListener("DOMContentLoaded", () => {
     botaoFecharTarefa.addEventListener("click", () => {
         modalTarefa.hidden = true;
     });
-
-    atualizarListaTarefas();
 
     function verificarInteracaoTarefa() {
         // Distâncias medidas a partir do centro do personagem.
@@ -1005,6 +1069,10 @@ document.addEventListener("DOMContentLoaded", () => {
         mostrarAviso("Aproxime-se de um objeto ou tarefa e pressione E.");
     }
 
+    // =================================================================
+    // 6. PARTIDA
+    // =================================================================
+
     // Sistema da partida local.
     const partida = {
         duracaoInicial: 300,
@@ -1025,19 +1093,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const relogioPartida = document.getElementById("match-clock");
     const painelAdversarios = document.getElementById("opponents-panel");
     const jogadoresAtivos = document.getElementById("active-players");
-    const nomeJogador = document.getElementById("player-name");
     const pauseOverlay = document.getElementById("pause-overlay");
     const resultOverlay = document.getElementById("result-overlay");
     const pauseButton = document.getElementById("pause-button");
-
-    if (seletorPersonagem) {
-        seletorPersonagem.addEventListener("change", () => {
-            const nomes = ["Estudante Azul", "Estudante Rosa", "Estudante Roxo", "Estudante Amarelo", "Estudante Cinza"];
-            const elementoNome = document.getElementById("player-name");
-            if (elementoNome) elementoNome.textContent = nomes[Number(seletorPersonagem.value)];
-            personagem.personagemAtual = Number(seletorPersonagem.value);
-        });
-    }
 
     function atualizarPainelAdversarios() {
         painelAdversarios.innerHTML = "";
@@ -1255,8 +1313,9 @@ document.addEventListener("DOMContentLoaded", () => {
         abrirTela("menu-screen");
     });
 
-    atualizarPainelAdversarios();
-    atualizarCronometro();
+    // =================================================================
+    // 7. SALAS (simulação local)
+    // =================================================================
 
     // Camada demonstrativa de salas: os dados ficam somente em memória.
     // Pode ser substituída por HTTP ou WebSocket no futuro.
@@ -1412,5 +1471,47 @@ document.addEventListener("DOMContentLoaded", () => {
         if (typeof iniciarPartida === "function") iniciarPartida();
     });
 
+    // =================================================================
+    // 8. LOOP PRINCIPAL E INICIALIZAÇÃO
+    // =================================================================
+
+    let ultimoTempo = 0;
+
+    function executarJogo(tempoAtual) {
+        if (!contexto) return;
+
+        const deltaTempo = (tempoAtual - ultimoTempo) / 1000;
+        ultimoTempo = tempoAtual;
+
+        if (telas[0] && document.getElementById("play-screen").classList.contains("active")) {
+            // Pausado: nada se move, só o desenho continua.
+            if (!partida.pausada) {
+                atualizarPartida();
+                atualizarEvento();
+                atualizarPersonagem(Math.min(deltaTempo, 0.05));
+                // Resolve a colisão antes de desenhar, para não haver quadro sobreposto.
+                checarColisao();
+            }
+            desenharFundo();
+            desenharPersonagem();
+        }
+
+        requestAnimationFrame(executarJogo);
+    }
+
+    // Tudo abaixo roda depois que todas as constantes acima já existem.
+    aplicarVelocidade();
+    if (controleVolume && textoVolume) textoVolume.textContent = `${controleVolume.value}%`;
+    atualizarListaTarefas();
+    atualizarPainelAdversarios();
+    atualizarCronometro();
     atualizarSalasPublicas();
+
+    if (contexto) {
+        desenharFundo();
+        desenharPersonagem();
+        requestAnimationFrame(executarJogo);
+    }
+
+    console.log("Menu principal do Laboratory Chaos carregado com sucesso.");
 });
