@@ -19,21 +19,56 @@
 // 1. CONFIGURAÇÃO
 // =================================================================
 
+const os = require("os");
 const path = require("path");
 const http = require("http");
 const express = require("express");
 const { Server } = require("socket.io");
 
-const app = express();
-const servidor = http.createServer(app);
-const io = new Server(servidor);
 const PORTA = process.env.PORT || 3000;
 
-// Serve o jogo (index.html, style.css, script.js, assets).
-app.use(express.static(path.join(__dirname, "..", "public")));
+// Sites que podem se conectar ao Socket.IO (CORS), separados por vírgula.
+// Padrão: o GitHub Pages do jogo e servidores locais comuns (ex.: Live Server).
+const ORIGENS_PADRAO = [
+    "https://professoralissonlucas.github.io",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5500",
+    "http://127.0.0.1:5500"
+];
+const ORIGENS_PERMITIDAS = process.env.ORIGENS_PERMITIDAS
+    ? process.env.ORIGENS_PERMITIDAS.split(",").map((origem) => origem.trim()).filter(Boolean)
+    : ORIGENS_PADRAO;
+
+const app = express();
+const servidor = http.createServer(app);
+const io = new Server(servidor, {
+    cors: { origin: ORIGENS_PERMITIDAS }
+});
+
+// Modo local (rede da escola sem internet): o Express também serve o jogo,
+// que fica na pasta raiz do projeto (um nível acima de server/).
+const PASTA_DO_JOGO = path.join(__dirname, "..");
+
+// Não expõe o código do servidor nem node_modules pela web.
+app.use("/server", (req, res) => res.sendStatus(404));
+// dotfiles "ignore": esconde .git, .gitignore etc. (o padrão do Express
+// ainda entregaria arquivos dentro de pastas como .git/).
+app.use(express.static(PASTA_DO_JOGO, { dotfiles: "ignore" }));
+
+// Lista os IPs desta máquina na rede local (para os colegas acessarem).
+function ipsDaRedeLocal() {
+    const ips = [];
+    Object.values(os.networkInterfaces()).forEach((interfaces) => {
+        (interfaces || []).forEach((item) => {
+            if (item.family === "IPv4" && !item.internal) ips.push(item.address);
+        });
+    });
+    return ips;
+}
 
 // =================================================================
-// 2. REGRAS (manter igual ao public/script.js)
+// 2. REGRAS (manter igual ao script.js da raiz)
 // =================================================================
 
 const REGRAS = {
@@ -476,6 +511,10 @@ io.on("connection", (socket) => {
     });
 });
 
-servidor.listen(PORTA, () => {
-    console.log(`Laboratory Chaos rodando em http://localhost:${PORTA}`);
+// 0.0.0.0 aceita conexões de outros computadores da rede (e do Render).
+servidor.listen(PORTA, "0.0.0.0", () => {
+    console.log(`Laboratory Chaos rodando na porta ${PORTA}`);
+    console.log(`  Neste computador: http://localhost:${PORTA}`);
+    ipsDaRedeLocal().forEach((ip) => console.log(`  Na rede local:    http://${ip}:${PORTA}`));
+    console.log(`  Origens permitidas (CORS): ${ORIGENS_PERMITIDAS.join(", ")}`);
 });

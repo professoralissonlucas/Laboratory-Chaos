@@ -8,9 +8,9 @@
     <!-- Importa o arquivo de estilos da página. -->
     <link rel="stylesheet" href="style.css">
 
-    <!-- Cliente Socket.IO servido pelo próprio servidor (npm start).
-         Aberto direto no navegador ele não carrega e o jogo fica no modo solo. -->
-    <script src="/socket.io/socket.io.js" defer></script>
+    <!-- Endereço do servidor multiplayer. O cliente Socket.IO é carregado
+         depois, pelo script.js, a partir desse servidor. -->
+    <script src="config.js" defer></script>
 
     <!-- Importa o JavaScript após o carregamento do HTML. -->
     <script src="script.js" defer></script>

@@ -1472,14 +1472,19 @@ document.addEventListener("DOMContentLoaded", () => {
     // 7. SALAS (multiplayer pelo servidor Socket.IO)
     // =================================================================
 
-    // Estado da conexão. Sem servidor (index.html aberto direto), "io" não existe.
+    // Estado da conexão. "conectando" enquanto o cliente Socket.IO carrega.
     const rede = {
         socket: null,
         online: false,
+        conectando: true,
         meuId: null,
         sala: null,
         publicas: []
     };
+
+    // Tempo máximo esperando o servidor antes de mostrar "offline".
+    // (O Render gratuito pode demorar para "acordar"; se ele responder depois, conecta sozinho.)
+    const ESPERA_SERVIDOR_MS = 15000;
 
     const criarSalaPublica = document.getElementById("create-public-room");
     const criarSalaPrivada = document.getElementById("create-private-room");
@@ -1498,9 +1503,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Mostra se o servidor está disponível e libera/bloqueia os botões de sala.
     function atualizarStatusServidor() {
-        statusServidor.textContent = rede.online
-            ? "SERVIDOR ONLINE — salas reais com outros jogadores."
-            : "SERVIDOR OFFLINE — use JOGAR para o modo solo.";
+        if (rede.online) {
+            statusServidor.textContent = "SERVIDOR ONLINE — salas reais com outros jogadores.";
+        } else if (rede.conectando) {
+            statusServidor.textContent = "CONECTANDO AO SERVIDOR...";
+        } else {
+            statusServidor.textContent = "SERVIDOR OFFLINE — use JOGAR para o modo solo.";
+        }
 
         [criarSalaPublica, criarSalaPrivada, entrarSalaBotao].forEach((botao) => {
             botao.disabled = !rede.online;
@@ -1609,7 +1618,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (rede.publicas.length === 0) {
             const vazio = document.createElement("p");
-            vazio.textContent = rede.online ? "Nenhuma sala pública aberta." : "Indisponível sem servidor.";
+            if (rede.online) vazio.textContent = "Nenhuma sala pública aberta.";
+            else vazio.textContent = rede.conectando ? "Aguardando o servidor..." : "Indisponível sem servidor.";
             listaSalasPublicas.appendChild(vazio);
             return;
         }
@@ -1668,18 +1678,49 @@ document.addEventListener("DOMContentLoaded", () => {
         return "Empate ao final do tempo. Nenhum jogador venceu!";
     }
 
-    // Liga ao servidor e trata cada evento que ele envia.
+    // Carrega o cliente Socket.IO do próprio servidor (config.js define URL_SERVIDOR).
+    // Se não carregar a tempo, mostra "offline"; o modo solo não depende disso.
     function conectarServidor() {
-        if (typeof io === "undefined") {
+        // Remove "/" do final para não gerar "//socket.io".
+        const url = typeof URL_SERVIDOR === "string" ? URL_SERVIDOR.replace(/\/+$/, "") : null;
+        if (!url) {
+            rede.conectando = false;
             atualizarStatusServidor();
             return;
         }
 
-        const socket = io();
+        rede.conectando = true;
+        atualizarStatusServidor();
+
+        const limite = window.setTimeout(() => {
+            if (!rede.online) {
+                rede.conectando = false;
+                atualizarStatusServidor();
+            }
+        }, ESPERA_SERVIDOR_MS);
+
+        const script = document.createElement("script");
+        script.src = `${url}/socket.io/socket.io.js`;
+        script.onload = () => iniciarSocket(url, limite);
+        script.onerror = () => {
+            window.clearTimeout(limite);
+            rede.conectando = false;
+            atualizarStatusServidor();
+        };
+        document.head.appendChild(script);
+    }
+
+    // Liga ao servidor e trata cada evento que ele envia.
+    function iniciarSocket(url, limite) {
+        if (typeof io === "undefined") return;
+
+        const socket = io(url);
         rede.socket = socket;
 
         socket.on("connect", () => {
+            window.clearTimeout(limite);
             rede.online = true;
+            rede.conectando = false;
             rede.meuId = socket.id;
             atualizarStatusServidor();
         });
@@ -1687,11 +1728,14 @@ document.addEventListener("DOMContentLoaded", () => {
         // Servidor fora do ar: o Socket.IO continua tentando reconectar sozinho.
         socket.on("connect_error", () => {
             rede.online = false;
+            rede.conectando = false;
             atualizarStatusServidor();
         });
 
         socket.on("disconnect", () => {
+            // O Socket.IO tenta reconectar sozinho; até lá mostra "conectando".
             rede.online = false;
+            rede.conectando = true;
             atualizarStatusServidor();
 
             // Caiu no meio da partida: o jogador sai (derrota por desconexão).

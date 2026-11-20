@@ -21,29 +21,36 @@ Há dois modos:
 ## 2. Estrutura de arquivos
 
 ```
-rafisa/
-├── package.json      # "npm start"; dependências: express, socket.io
-├── server/index.js   # Servidor estático + Socket.IO + regras das salas/partida
-├── public/
-│   ├── index.html    # Estrutura de todas as telas
-│   ├── style.css     # Visual pixel art e layout responsivo
-│   ├── script.js     # Toda a lógica do cliente (8 seções comentadas)
-│   └── assets/       # images/ e sounds/ vazios (reservados)
+rafisa/                 # raiz = publicada pelo GitHub Pages
+├── index.html          # Estrutura de todas as telas
+├── style.css           # Visual pixel art e layout responsivo
+├── config.js           # URL do servidor multiplayer
+├── script.js           # Toda a lógica do cliente (8 seções comentadas)
+├── assets/             # images/ e sounds/ vazios (reservados)
+├── server/
+│   ├── package.json    # "npm start"; dependências: express, socket.io
+│   └── index.js        # Socket.IO + regras das salas/partida (+ estáticos no modo local)
 ├── SPEC.md
 └── CLAUDE.md
 ```
 
 - Gráficos desenhados via **Canvas 2D** com retângulos coloridos; o som do alarme é gerado via **Web Audio API**.
 - Controle de versão com git; `node_modules/` é ignorado.
+- Todos os caminhos no HTML/CSS/JS são relativos (o Pages publica em `/Laboratory-Chaos/`).
 
 ### Como executar
-- **Multiplayer**: `npm install`, depois `npm start` e abrir `http://localhost:3000` (porta via variável `PORT`). Outros computadores da mesma rede usam `http://IP-da-máquina:3000`.
-- **Só solo**: abrir `public/index.html` direto no navegador. O `/socket.io/socket.io.js` não carrega, `io` fica indefinido e a tela Salas mostra "SERVIDOR OFFLINE".
+- **Online**: front-end no GitHub Pages (https://professoralissonlucas.github.io/Laboratory-Chaos/); servidor no Render (*Root Directory* `server`, `npm install` / `npm start`). A URL do Render vai em `URL_SERVIDOR_ONLINE` no `config.js`.
+- **Rede da escola**: `cd server && npm install && npm start`. O Express serve o jogo da pasta raiz e imprime os endereços `http://IP:3000` da rede local.
+- **Só solo**: abrir `index.html` direto no navegador (`file://`): sem servidor, a tela Salas mostra "SERVIDOR OFFLINE".
 - O `script.js` é carregado com `defer` e tudo roda dentro de um único `DOMContentLoaded` (sem ES modules, para funcionar via `file://`).
+
+### Conexão com o servidor
+- `config.js` define `URL_SERVIDOR`: em `*.github.io` usa `URL_SERVIDOR_ONLINE`; em `localhost`/IP usa `location.origin`; em `file://` é `null`.
+- `conectarServidor()` cria um `<script>` com `${URL_SERVIDOR}/socket.io/socket.io.js`. Estados na tela Salas: "CONECTANDO AO SERVIDOR..." → "SERVIDOR ONLINE" ou, se falhar/passar de 15s, "SERVIDOR OFFLINE". Se o servidor responder depois (Render acordando), conecta sozinho.
 
 ---
 
-## 3. Telas (public/index.html)
+## 3. Telas (index.html)
 
 Cada tela é um `<main class="screen">`; apenas a que tem a classe `active` é exibida. A navegação é feita por botões com `data-screen="<id-da-tela>"`.
 
@@ -62,7 +69,7 @@ Elementos sobrepostos (atributo `hidden`):
 
 ---
 
-## 4. Visual (public/style.css)
+## 4. Visual (style.css)
 
 - **Paleta** no `:root`: `--night #13172b`, `--panel #252b4a`, `--panel-light #343d68`, `--blue #62c9df`, `--purple #8b66b5`, `--pink #ed87b8`, `--yellow #f4d35e`, `--gray #bbc1d1`, `--white #fff8dc`.
 - Fonte única: `"Courier New", monospace`.
@@ -73,7 +80,7 @@ Elementos sobrepostos (atributo `hidden`):
 
 ---
 
-## 5. Lógica do cliente (public/script.js)
+## 5. Lógica do cliente (script.js)
 
 Seções: 1. Navegação e configurações · 2. Personagem · 3. Mapa · 4. Eventos · 5. Tarefas · 6. Partida · 7. Salas · 8. Loop principal e inicialização.
 
@@ -139,7 +146,10 @@ Objeto `rede` (socket, online, meuId, sala, publicas) e `salasRede` (criar, entr
 
 ## 6. Servidor (server/index.js)
 
-- Serve `public/` e o cliente Socket.IO. Estado só em memória: `salas` (Map por código `LAB` + 3 letras).
+- Escuta em `0.0.0.0` na porta `PORT` (padrão 3000) e imprime os IPs da rede local ao iniciar.
+- CORS do Socket.IO pela variável `ORIGENS_PERMITIDAS` (vírgulas). Padrão: `https://professoralissonlucas.github.io` e `localhost`/`127.0.0.1` nas portas 3000 e 5500.
+- Modo local: serve os arquivos estáticos da pasta raiz, bloqueando `server/` e arquivos/pastas com ponto (`.git/`).
+- Estado só em memória: `salas` (Map por código `LAB` + 3 letras).
 - Sala: anfitrião, estado (`lobby` | `jogando`), jogadores (personagem único, ativo, tarefas, frascos e cartões individuais) e partida.
 - Relógio por **tick de 1s**: desconta tempo, eventos e o próximo sorteio (18–30s), e envia `partida:estado`. Pausado, não desconta.
 - Valida tarefas: partida em andamento e sem pausa, jogador ativo, tarefa válida e inédita, 3 frascos para `frascos`, 3 cartões para `protocolo`. (O minijogo roda no navegador; o servidor valida regras e pré-requisitos, não os cliques.)
@@ -174,6 +184,7 @@ Objeto `rede` (socket, online, meuId, sala, publicas) e `salasRede` (criar, entr
 5. Na diagonal o personagem não desliza pela parede; teclas podem ficar "presas" se a janela perde o foco.
 6. Sem controles de toque: no celular a interface cabe na tela, mas não dá para andar.
 7. Multiplayer: outros jogadores não aparecem no mapa (só no painel); sem reconexão (recarregar a página = sair da partida).
+10. Render gratuito "dorme" sem uso: a primeira conexão pode passar dos 15s e mostrar "offline" antes de conectar sozinho.
 8. Multiplayer: o servidor não valida os cliques dos minijogos nem a posição do jogador.
 9. Pasta `assets/` vazia; sprites e sons são gerados por código.
 
