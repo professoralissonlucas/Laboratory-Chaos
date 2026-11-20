@@ -537,6 +537,23 @@ document.addEventListener("DOMContentLoaded", () => {
         return sala ? sala.nome : null;
     }
 
+    // Quem pede menos movimento no sistema vê o mapa sem pulso nem brilho.
+    const movimentoReduzido = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+    // Quantos pixels a marca de tarefa cresce em cada degrau do pulso.
+    const PULSO_TAREFA = [0, 1, 2, 1, 0, 0, 0, 0];
+
+    // Brilho em "estrelinha" de pixels (cor --white). Aparece por 280ms a cada
+    // 1,4s: primeiro pequeno, depois maior, e some.
+    function desenharBrilho(x, y, tempo) {
+        const momento = tempo % 1400;
+        if (momento >= 280) return;
+        const braco = momento < 140 ? 2 : 4;
+        contexto.fillStyle = "#fff8dc";
+        contexto.fillRect(x - 1, y - braco, 2, braco * 2);
+        contexto.fillRect(x - braco, y - 1, braco * 2, 2);
+    }
+
     // Desenha o mapa completo do laboratório e seus objetos.
     function desenharFundo() {
         contexto.fillStyle = "#343d68";
@@ -592,30 +609,39 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
 
-        // Marcadores das seis tarefas no mapa.
+        const agora = performance.now();
+        const animar = !movimentoReduzido.matches;
+
+        // Marcadores das seis tarefas no mapa. As pendentes "pulsam":
+        // crescem até 2px de cada lado, em degraus de 120ms (ciclo de ~1s).
         tarefas.forEach((tarefa) => {
+            const pulso = !tarefa.concluida && animar ? PULSO_TAREFA[Math.floor(agora / 120) % PULSO_TAREFA.length] : 0;
+            const metade = 10 + pulso;
             contexto.fillStyle = tarefa.concluida ? "#4e675a" : "#f4d35e";
-            contexto.fillRect(tarefa.x - 10, tarefa.y - 10, 20, 20);
+            contexto.fillRect(tarefa.x - metade, tarefa.y - metade, metade * 2, metade * 2);
             contexto.fillStyle = "#171a31";
             contexto.fillRect(tarefa.x - 3, tarefa.y - 3, 6, 6);
         });
 
-        // Frascos e cartões ainda não coletados aparecem no mapa.
-        objetosColetaveis.frascos.forEach((frasco) => {
+        // Frascos e cartões ainda não coletados aparecem no mapa,
+        // com um brilho que pisca no canto (cada um num momento diferente).
+        objetosColetaveis.frascos.forEach((frasco, indice) => {
             if (!frasco.coletado) {
                 contexto.fillStyle = "#ed87b8";
                 contexto.fillRect(frasco.x - 8, frasco.y - 8, 16, 16);
                 contexto.fillStyle = "#62c9df";
                 contexto.fillRect(frasco.x - 4, frasco.y - 12, 8, 8);
+                if (animar) desenharBrilho(frasco.x + 7, frasco.y - 12, agora + indice * 470);
             }
         });
 
-        objetosColetaveis.cartoes.forEach((cartao) => {
+        objetosColetaveis.cartoes.forEach((cartao, indice) => {
             if (!cartao.coletado) {
                 contexto.fillStyle = "#f4d35e";
                 contexto.fillRect(cartao.x - 10, cartao.y - 7, 20, 14);
                 contexto.fillStyle = "#8b66b5";
                 contexto.fillRect(cartao.x - 6, cartao.y - 3, 12, 6);
+                if (animar) desenharBrilho(cartao.x + 10, cartao.y - 7, agora + 700 + indice * 470);
             }
         });
 

@@ -78,6 +78,11 @@ Elementos sobrepostos (atributo `hidden`):
 - Canvas: resolução lógica 800×480, escalado só pelo CSS (`aspect-ratio: 5 / 3`).
 - **Responsivo**: breakpoint `@media (max-width: 700px)` — menos espaço interno, HUD em 2 colunas, painéis empilhados; os overlays de pausa/resultado passam a cobrir a tela inteira (`position: fixed`), porque o canvas fica pequeno demais. Testado em 360, 700 e 1280px sem rolagem horizontal. Telas de toque têm regras próprias (ver 4.1).
 - Botões desativados (`:disabled`) ficam com 50% de opacidade.
+- Tamanhos padronizados no `:root`: `--titulo-tela`, `--titulo-janela`, `--titulo-secao`, `--espaco`, `--espaco-grande` e `--espaco-janela` (menores até 700px).
+- Botões de bloco (`.menu-button`, `.back-button`, `.room-action`, `.task-option`): sobem 2px no hover (só com `hover: hover`), afundam 3px ao clicar e têm foco visível com `outline` amarelo de 3px (offset 2px). Transições em `steps(2)`.
+- Telas aparecem com `aparecerTela` (opacidade, `steps(4)`); modal, overlays e gaveta com `abrirJanela` (12px, `steps(3)`). O título do menu tem sombra em 3 camadas sólidas.
+- No canvas, as marcas de tarefa pendentes pulsam (`PULSO_TAREFA`) e os coletáveis piscam um brilho (`desenharBrilho()`).
+- `prefers-reduced-motion: reduce` desliga animações, transições, o pulso e o brilho (CSS e `movimentoReduzido` no script.js).
 
 ---
 

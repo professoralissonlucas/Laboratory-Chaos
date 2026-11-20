@@ -20,6 +20,7 @@ Revisão completa do projeto feita em 20/11/2026, a partir do `CLAUDE.md` e do `
   - em retrato: aviso "GIRE O CELULAR" e nenhum controle;
   - no computador: nenhum elemento de toque, ajuda de teclado visível, botão TELA CHEIA;
   - **multiplayer**: um celular emulado entra na sala digitando o código e apertando Enter, joga com dois computadores, e o movimento pelo direcional aparece na tela do computador.
+- **Polimento visual** (computador e celular emulado em paisagem): sombra do título, hover, apertar, foco por Tab, animação das telas e do modal, pulso e brilho no canvas, ausência de animação com `prefers-reduced-motion` e o botão E no toque. As baterias anteriores (computador, celular e multiplayer) foram rodadas de novo e continuam passando.
 - Busca por caminhos absolutos (`src="/…"`, `href="/…"`, `url(/…)`): **nenhum encontrado**.
 
 ---
@@ -105,6 +106,16 @@ Revisão completa do projeto feita em 20/11/2026, a partir do `CLAUDE.md` e do `
 25. **Tela cheia** (Fullscreen API, com o prefixo `webkit` como alternativa): tenta travar a tela deitada. O botão some quando o navegador não suporta, como no iPhone. No computador aparece como "⛶ TELA CHEIA".
 26. **Plaquinhas de nome legíveis no celular:** a letra acompanha a escala do canvas (11px na tela, até 18px do canvas).
 27. **Multiplayer no celular** funciona igual, porque o toque gera as mesmas "teclas" e a posição sai pelo mesmo `enviarPosicao()`. O servidor não mudou.
+
+### Polimento visual leve
+
+28. Mesma paleta, mesma fonte e estética pixel art (sem gradientes suaves, cantos arredondados nem sombras borradas):
+    - **Botões** (menu, voltar, salas e minijogos): sobem 2px no hover, só onde há mouse, para o hover não ficar preso no celular; afundam 3px e a sombra sólida quase some ao clicar; foco pelo teclado com contorno amarelo quadrado de 3px, separado do botão por um vão de 2px. Passos já feitos dos minijogos não reagem.
+    - **Transições em degraus** (`steps()`): telas aparecem em 4 degraus de opacidade; o modal, os overlays e a gaveta do celular sobem 12px em 3 degraus.
+    - **Títulos e espaços padronizados** por variáveis no `:root`: título de tela 34px, de janela 28px e de seção 20px (24/22/18px até 700px).
+    - **Título do menu** com sombra pixelada em 3 camadas sólidas: roxo, azul e o fundo escuro.
+    - **Canvas**: as marcas de tarefa pendentes pulsam (crescem até 2px, em degraus) e os frascos e cartões piscam uma estrelinha de pixels em `--white`, cada um num momento diferente.
+    - **`prefers-reduced-motion`**: sem animações de tela e janela, sem transições nos botões, sem pulso nem brilho no canvas, e o painel do alarme não pisca.
 
 O `server/index.js` **não precisou de mudanças**: as regras que ele repete continuam iguais às do cliente. `SPEC.md` e `CLAUDE.md` foram atualizados com as mudanças acima.
 

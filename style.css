@@ -13,6 +13,14 @@
     --yellow: #f4d35e;
     --gray: #bbc1d1;
     --white: #fff8dc;
+
+    /* Tamanhos de título e espaçamentos padronizados entre as telas. */
+    --titulo-tela: 34px;
+    --titulo-janela: 28px;
+    --titulo-secao: 20px;
+    --espaco: 16px;
+    --espaco-grande: 24px;
+    --espaco-janela: 36px;
 }
 
 /* Configurações gerais da página. */
@@ -164,7 +172,11 @@ h1 {
     font-size: clamp(32px, 4.2vw, 54px);
     line-height: 0.92;
     text-transform: uppercase;
-    text-shadow: 5px 5px 0 #15182d;
+    /* Sombra em camadas sólidas, sem desfoque: roxo, azul e o fundo escuro. */
+    text-shadow:
+        3px 3px 0 var(--purple),
+        6px 6px 0 var(--blue),
+        9px 9px 0 #15182d;
 }
 
 h1 span {
@@ -203,20 +215,6 @@ h1 span {
     text-align: left;
     box-shadow: 5px 5px 0 #171a31;
     font-size: 16px;
-    transition: transform 0.08s, background 0.08s;
-}
-
-.menu-button:hover,
-.menu-button:focus-visible {
-    transform: translate(-2px, -2px);
-    background: var(--purple);
-    outline: 3px solid var(--yellow);
-}
-
-.menu-button:active,
-.back-button:active {
-    transform: translate(3px, 3px);
-    box-shadow: 1px 1px 0 #171a31;
 }
 
 .menu-button.primary {
@@ -238,15 +236,15 @@ h1 span {
 /* Estilo das telas secundárias. */
 .content-window {
     max-width: 680px;
-    padding: 38px;
+    padding: var(--espaco-janela);
 }
 
 .content-window h2 {
-    margin: 0 0 24px;
+    margin: 0 0 var(--espaco-grande);
     color: var(--blue);
     border-bottom: 6px solid var(--pink);
     padding-bottom: 12px;
-    font-size: 34px;
+    font-size: var(--titulo-tela);
     text-shadow: 3px 3px 0 #15182d;
 }
 
@@ -257,7 +255,7 @@ h1 span {
     align-items: center;
     justify-content: center;
     gap: 18px;
-    margin-bottom: 24px;
+    margin-bottom: var(--espaco-grande);
     padding: 32px;
     background: #1b2038;
     border: 4px solid #4f587e;
@@ -272,10 +270,70 @@ h1 span {
     box-shadow: 5px 5px 0 #171a31;
 }
 
-.back-button:hover,
-.back-button:focus-visible {
-    background: var(--white);
-    outline: 3px solid var(--pink);
+/* ---------- Botões: levantar, apertar e foco ----------
+   Todos os botões "de bloco" se comportam igual. As mudanças acontecem
+   em degraus (steps), sem animação suave, como num jogo pixel art. */
+.menu-button,
+.back-button,
+.room-action,
+.task-option {
+    transition:
+        transform 0.12s steps(2),
+        box-shadow 0.12s steps(2),
+        background-color 0.12s steps(2);
+}
+
+/* Passar o mouse: o botão "sobe" 2px e a sombra cresce.
+   Só em telas com mouse (no celular o hover ficaria preso). */
+@media (hover: hover) {
+    .menu-button:hover:not(:disabled),
+    .back-button:hover:not(:disabled),
+    .room-action:hover:not(:disabled),
+    .task-option:hover:not(:disabled) {
+        transform: translate(-2px, -2px);
+    }
+
+    .menu-button:hover:not(:disabled) {
+        background: var(--purple);
+        box-shadow: 7px 7px 0 #171a31;
+    }
+
+    .menu-button.primary:hover:not(:disabled) {
+        background: var(--pink);
+    }
+
+    .back-button:hover:not(:disabled) {
+        background: var(--white);
+        box-shadow: 7px 7px 0 #171a31;
+    }
+
+    .room-action:hover:not(:disabled),
+    .task-option:hover:not(:disabled) {
+        background: var(--purple);
+        box-shadow: 6px 6px 0 #171a31;
+    }
+}
+
+/* Clicar/tocar: o botão "afunda" e a sombra sólida quase some. */
+.menu-button:active:not(:disabled),
+.back-button:active:not(:disabled),
+.room-action:active:not(:disabled),
+.task-option:active:not(:disabled) {
+    transform: translate(3px, 3px);
+    box-shadow: 1px 1px 0 #171a31;
+}
+
+/* Foco pelo teclado (Tab): moldura amarela quadrada, separada do botão
+   por um vão de 2px, como um contorno de pixel art. */
+.menu-button:focus-visible,
+.back-button:focus-visible,
+.room-action:focus-visible,
+.task-option:focus-visible,
+.touch-bar-button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+    outline: 3px solid var(--yellow);
+    outline-offset: 2px;
 }
 
 .how-to-card {
@@ -286,6 +344,7 @@ h1 span {
 .how-to-card h3 {
     margin: 0;
     color: var(--yellow);
+    font-size: var(--titulo-secao);
 }
 
 .how-to-card p,
@@ -570,9 +629,14 @@ h1 span {
     font-size: 18px;
     font-weight: bold;
     cursor: pointer;
+    box-shadow: 4px 4px 0 #171a31;
 }
 
-.task-option:hover,
+/* Passos já feitos não "afundam" nem sobem. */
+.task-option:disabled {
+    cursor: default;
+}
+
 .task-option.selected {
     background: var(--purple);
     border-color: var(--yellow);
@@ -659,7 +723,7 @@ h1 span {
     border: 6px solid var(--pink);
     box-shadow: 8px 8px 0 #090b16;
 }
-.match-overlay-window h2 { margin: 0 0 14px; color: var(--yellow); }
+.match-overlay-window h2 { margin: 0 0 14px; color: var(--yellow); font-size: var(--titulo-janela); text-shadow: 3px 3px 0 #15182d; }
 .overlay-actions {
     display: flex;
     justify-content: center;
@@ -679,7 +743,7 @@ h1 span {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
-    margin: 16px 0;
+    margin: var(--espaco) 0;
 }
 .room-action {
     min-height: 90px;
@@ -689,19 +753,24 @@ h1 span {
     font-family: "Courier New", monospace;
     font-weight: bold;
     cursor: pointer;
+    box-shadow: 4px 4px 0 #171a31;
 }
 .room-action span { display: block; color: var(--yellow); font-size: 28px; }
 .join-panel,
 .public-rooms,
 .room-lobby {
-    margin: 16px 0;
-    padding: 16px;
+    margin: var(--espaco) 0;
+    padding: var(--espaco);
     background: #1b2038;
     border: 4px solid #777f98;
 }
 /* Sem margem extra no topo: o título fica alinhado ao padding do painel. */
 .join-panel h3,
 .public-rooms h3 { margin-top: 0; }
+.join-panel h3,
+.public-rooms h3,
+.lobby-header h3,
+.task-modal-window h3 { font-size: var(--titulo-secao); }
 .join-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
 .join-row input {
     min-width: 0;
@@ -764,6 +833,14 @@ h1 span {
 #room-feedback { min-height: 20px; margin: 10px 0 0; color: var(--yellow); }
 
 @media (max-width: 700px) {
+    /* Títulos e espaços menores, nas mesmas proporções do computador. */
+    :root {
+        --titulo-tela: 24px;
+        --titulo-janela: 22px;
+        --titulo-secao: 18px;
+        --espaco-janela: 16px;
+    }
+
     .screen {
         padding:
             max(16px, env(safe-area-inset-top))
@@ -781,6 +858,10 @@ h1 span {
 
     h1 {
         font-size: clamp(32px, 9vw, 48px);
+        text-shadow:
+            2px 2px 0 var(--purple),
+            4px 4px 0 var(--blue),
+            6px 6px 0 #15182d;
     }
 
     .lab-background {
@@ -788,14 +869,6 @@ h1 span {
     }
 
     /* Menos espaço interno para o conteúdo caber em 360px. */
-    .content-window {
-        padding: 16px;
-    }
-
-    .content-window h2 {
-        font-size: 24px;
-    }
-
     .content-card {
         padding: 18px;
     }
@@ -824,10 +897,6 @@ h1 span {
 
     .match-overlay-window {
         padding: 18px;
-    }
-
-    .match-overlay-window h2 {
-        font-size: 24px;
     }
 
     .task-modal {
@@ -1101,7 +1170,7 @@ h1 span {
 
     #play-screen .panels-header strong {
         color: var(--blue);
-        font-size: 20px;
+        font-size: var(--titulo-secao);
         text-shadow: 3px 3px 0 #15182d;
     }
 
@@ -1231,7 +1300,7 @@ h1 span {
 
     .rotate-notice strong {
         color: var(--yellow);
-        font-size: 26px;
+        font-size: var(--titulo-janela);
         text-shadow: 3px 3px 0 #15182d;
     }
 
@@ -1270,5 +1339,58 @@ h1 span {
     .rotate-phone {
         animation: none;
         transform: rotate(90deg);
+    }
+}
+
+/* =====================================================================
+   TRANSIÇÕES EM DEGRAUS
+   Telas e janelas aparecem em poucos "quadros" (steps), sem suavização,
+   como num jogo pixel art. Só opacidade e deslocamentos de 4px.
+   ===================================================================== */
+
+/* Trocar de tela: a nova tela aparece em 4 degraus de opacidade.
+   (Sem transform aqui: ele mudaria a posição dos elementos fixos de dentro.) */
+.screen.active {
+    animation: aparecerTela 0.24s steps(4) both;
+}
+
+/* Modal de tarefa: o fundo escurece em 2 degraus e a janela sobe 12px em 3. */
+.task-modal:not([hidden]) {
+    animation: aparecerTela 0.16s steps(2) both;
+}
+
+.task-modal:not([hidden]) .task-modal-window,
+.match-overlay:not([hidden]) .match-overlay-window,
+body.paineis-abertos #play-screen .match-panels {
+    animation: abrirJanela 0.18s steps(3) both;
+}
+
+@keyframes aparecerTela {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes abrirJanela {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: none; }
+}
+
+/* Quem pede menos movimento no sistema não vê animações nem deslocamentos.
+   (O canvas confere a mesma preferência no script.js.) */
+@media (prefers-reduced-motion: reduce) {
+    .screen.active,
+    .task-modal:not([hidden]),
+    .task-modal:not([hidden]) .task-modal-window,
+    .match-overlay:not([hidden]) .match-overlay-window,
+    body.paineis-abertos #play-screen .match-panels,
+    .event-panel.alarm-active {
+        animation: none;
+    }
+
+    .menu-button,
+    .back-button,
+    .room-action,
+    .task-option {
+        transition: none;
     }
 }
