@@ -5,7 +5,8 @@
   "private": true,
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "node scripts/teste-multiplayer.js"
   },
   "engines": {
     "node": ">=18"
@@ -13,5 +14,8 @@
   "dependencies": {
     "express": "^4.21.2",
     "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.4"
   }
 }

@@ -28,8 +28,9 @@ rafisa/                 # raiz = publicada pelo GitHub Pages
 ├── script.js           # Toda a lógica do cliente (8 seções comentadas)
 ├── assets/             # images/ e sounds/ vazios (reservados)
 ├── server/
-│   ├── package.json    # "npm start"; dependências: express, socket.io
-│   └── index.js        # Socket.IO + regras das salas/partida (+ estáticos no modo local)
+│   ├── package.json    # "npm start" e "npm test"; dependências: express, socket.io
+│   ├── index.js        # Socket.IO + regras das salas/partida (+ estáticos no modo local)
+│   └── scripts/teste-multiplayer.js   # teste automático do multiplayer
 ├── SPEC.md
 └── CLAUDE.md
 ```
@@ -162,6 +163,14 @@ Objeto `rede` (socket, online, meuId, sala, publicas) e `salasRede` (criar, entr
 - Valida tarefas: partida em andamento e sem pausa, jogador ativo, tarefa válida e inédita, 3 frascos para `frascos`, 3 cartões para `protocolo`. (O minijogo roda no navegador; o servidor valida regras e pré-requisitos, não os cliques.)
 - Resultado igual para todos: 6 tarefas → vence; um único ativo → vence; fim do tempo → mais tarefas vence (empate no topo = ninguém vence). Depois a sala volta ao lobby.
 - Saída/desconexão: no lobby remove; na partida fica inativo; se era anfitrião, o próximo ativo assume; sala vazia é apagada. Partida em andamento não aceita novos jogadores.
+
+### Teste automático (`cd server && npm test`)
+Sobe o servidor numa porta livre e simula de 3 a 6 jogadores (37 verificações), em 3 cenários:
+1. **Salas**: criar sala privada (fora da lista pública), código inexistente, entrar pelo código, recusar início com 2, recusar o 6º jogador, personagens únicos, sair da sala, só o anfitrião inicia.
+2. **Partida**: início com 3, entrada recusada durante a partida, cronômetro igual e diminuindo, repasse e limite de posição, tarefa recusada/confirmada/repetida, progresso para os outros, mesmo evento para todos (início e fim), pausa só do anfitrião, anfitrião desconecta com o jogo pausado (o próximo assume e continua), último jogador ativo vence, sala volta ao lobby.
+3. **Lobby e vitória por tarefas**: sala pública na lista em tempo real, anfitrião sai no lobby (o próximo assume), conclusão das 6 tarefas com o mesmo resultado para todos.
+
+`URL_TESTE=<url> npm test` testa um servidor já rodando (ex.: o do Render). Sai com código 1 se algo falhar.
 
 ### Eventos Socket.IO
 - Cliente → servidor: `sala:criar`, `sala:entrar`, `sala:sair`, `sala:personagem`, `partida:iniciar`, `partida:pausar`, `evento:testar`, `coletavel:pegar`, `tarefa:concluir`, `jogador:posicao`.

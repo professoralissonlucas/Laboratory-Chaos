@@ -11,7 +11,7 @@ Há dois modos:
 - **Multiplayer** (tela SALAS): servidor **Node.js + Express + Socket.IO**, sem banco de dados (tudo em memória). Salas públicas/privadas, 3 a 5 jogadores, servidor autoritativo (cronômetro, eventos, validação de tarefas, resultado).
 
 - Idioma da interface e do código: português (pt-BR).
-- Sem build nem testes automatizados no repositório.
+- Sem build. Testes automáticos do multiplayer: `cd server && npm test` (sobe o servidor numa porta livre e simula de 3 a 6 jogadores com `socket.io-client`; `URL_TESTE=<url> npm test` testa um servidor já rodando). Rode-os depois de qualquer mudança no `server/index.js` ou nos eventos Socket.IO.
 
 ## Publicação e execução
 
@@ -32,8 +32,10 @@ rafisa/                  # raiz = o que o GitHub Pages publica
 ├── script.js            # Toda a lógica do cliente, dentro de um único DOMContentLoaded
 ├── assets/              # images/ e sounds/ vazios (reservados)
 ├── server/              # Servidor isolado, com package.json próprio
-│   ├── package.json     # "npm start" → node index.js; deps: express, socket.io
-│   └── index.js         # Socket.IO + regras das salas/partida (+ arquivos estáticos no modo local)
+│   ├── package.json     # "npm start" / "npm test"; deps: express, socket.io; dev: socket.io-client
+│   ├── index.js         # Socket.IO + regras das salas/partida (+ arquivos estáticos no modo local)
+│   └── scripts/
+│       └── teste-multiplayer.js  # Teste automático (npm test)
 ├── SPEC.md              # Especificação do estado atual e limitações conhecidas
 ├── CLAUDE.md            # Este arquivo
 └── .gitignore           # ignora node_modules/ (em qualquer pasta)
