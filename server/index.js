@@ -83,6 +83,12 @@ const REGRAS = {
     duracaoTeste: 8000,
     // Índices das portas travadas pelo evento: Computadores e Energia.
     portasTravadas: [0, 1],
+    // Limites da posição (canvas 800x480 menos o desenho de 48px).
+    posicaoMaximaX: 752,
+    posicaoMaximaY: 432,
+    direcoes: ["cima", "baixo", "esquerda", "direita"],
+    // Intervalo mínimo entre posições de um jogador (~15 por segundo, com folga).
+    intervaloPosicaoMs: 40,
     nomesPersonagens: ["Azul", "Rosa", "Roxo", "Amarelo", "Cinza"]
 };
 
@@ -485,6 +491,35 @@ io.on("connection", (socket) => {
 
         if (tipo === "frascos") jogador.frascos.add(indice);
         if (tipo === "cartoes") jogador.cartoes.add(indice);
+    });
+
+    // Posição do jogador: o servidor confere e repassa para os outros da sala.
+    socket.on("jogador:posicao", (dados) => {
+        const sala = minhaSala();
+        if (!sala || sala.estado !== "jogando" || sala.partida.pausada) return;
+
+        const jogador = sala.jogadores.get(socket.id);
+        if (!jogador || !jogador.ativo || !dados) return;
+
+        // Ignora mensagens rápidas demais (protege o servidor).
+        const agora = Date.now();
+        if (agora - (jogador.ultimaPosicaoEm || 0) < REGRAS.intervaloPosicaoMs) return;
+        jogador.ultimaPosicaoEm = agora;
+
+        const x = Number(dados.x);
+        const y = Number(dados.y);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+
+        const posicao = {
+            id: socket.id,
+            x: Math.round(Math.min(REGRAS.posicaoMaximaX, Math.max(0, x))),
+            y: Math.round(Math.min(REGRAS.posicaoMaximaY, Math.max(0, y))),
+            direcao: REGRAS.direcoes.includes(dados.direcao) ? dados.direcao : "baixo",
+            andando: Boolean(dados.andando)
+        };
+
+        // volatile: se a rede estiver lenta, descarta posições velhas em vez de acumular.
+        socket.volatile.to(sala.codigo).emit("jogador:posicao", posicao);
     });
 
     socket.on("tarefa:concluir", (dados) => {

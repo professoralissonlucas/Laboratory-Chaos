@@ -94,8 +94,14 @@ document.addEventListener("DOMContentLoaded", () => {
         { nome: "Cinza", roupa: "#bbc1d1", detalhe: "#747b91", cabelo: "#353a50" }
     ];
 
-    // Posição onde o personagem começa cada partida.
+    // Posição onde o personagem começa cada partida (solo).
     const posicaoInicial = { x: 376, y: 288 };
+
+    // No multiplayer cada personagem (0 a 4) nasce lado a lado na sala principal.
+    // O personagem 2 nasce no mesmo ponto do modo solo.
+    function posicaoDeSaida(indicePersonagem) {
+        return { x: 296 + indicePersonagem * 40, y: 288 };
+    }
 
     const personagem = {
         x: posicaoInicial.x,
@@ -165,23 +171,30 @@ document.addEventListener("DOMContentLoaded", () => {
         controleVelocidade.addEventListener("input", aplicarVelocidade);
     }
 
-    // Desenha um personagem em uma grade lógica de 16 por 16 pixels.
+    // Desenha o personagem do próprio jogador.
     function desenharPersonagem() {
-        const dados = personagens[personagem.personagemAtual];
-        const escala = personagem.tamanho / 16;
+        desenharBoneco(personagem);
+    }
+
+    // Desenha qualquer boneco (o jogador ou outro jogador da sala) numa grade 16x16.
+    // O boneco precisa de: x, y, direcao, andando, quadroAnimacao e personagemAtual.
+    function desenharBoneco(boneco) {
+        const dados = personagens[boneco.personagemAtual];
+        const tamanho = personagem.tamanho;
+        const escala = tamanho / 16;
 
         contexto.save();
 
         // Virar o desenho horizontalmente muda a direção esquerda/direita.
-        if (personagem.direcao === "esquerda") {
-            contexto.translate(personagem.x + personagem.tamanho, personagem.y);
+        if (boneco.direcao === "esquerda") {
+            contexto.translate(boneco.x + tamanho, boneco.y);
             contexto.scale(-1, 1);
         } else {
-            contexto.translate(personagem.x, personagem.y);
+            contexto.translate(boneco.x, boneco.y);
         }
 
         // Tremor vertical de 1 pixel durante os passos.
-        const salto = personagem.andando && personagem.quadroAnimacao === 1 ? escala : 0;
+        const salto = boneco.andando && boneco.quadroAnimacao === 1 ? escala : 0;
 
         // Sombra simples.
         contexto.fillStyle = "#202640";
@@ -189,8 +202,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // Pernas.
         contexto.fillStyle = "#30364f";
-        const passoEsquerdo = personagem.andando && personagem.quadroAnimacao === 1 ? 1 : 0;
-        const passoDireito = personagem.andando && personagem.quadroAnimacao === 0 ? 1 : 0;
+        const passoEsquerdo = boneco.andando && boneco.quadroAnimacao === 1 ? 1 : 0;
+        const passoDireito = boneco.andando && boneco.quadroAnimacao === 0 ? 1 : 0;
         contexto.fillRect((3 - passoEsquerdo) * escala, 11 * escala, 4 * escala, 3 * escala);
         contexto.fillRect((9 + passoDireito) * escala, 11 * escala, 4 * escala, 3 * escala);
 
@@ -214,12 +227,30 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // Olhos que mudam conforme a direção inferior/superior.
         contexto.fillStyle = "#171a31";
-        if (personagem.direcao === "cima") {
+        if (boneco.direcao === "cima") {
             contexto.fillRect(6 * escala, 4 * escala, 1 * escala, 1 * escala);
         } else {
             contexto.fillRect(10 * escala, 5 * escala, 1 * escala, 1 * escala);
         }
 
+        contexto.restore();
+    }
+
+    // Plaquinha com o nome acima da cabeça (fundo escuro, texto claro, sem cantos arredondados).
+    function desenharNome(boneco, nome) {
+        contexto.save();
+        contexto.font = "bold 11px 'Courier New', monospace";
+        contexto.textAlign = "center";
+        contexto.textBaseline = "middle";
+
+        const largura = Math.ceil(contexto.measureText(nome).width) + 8;
+        const centroX = Math.round(boneco.x + personagem.tamanho / 2);
+        const topo = Math.max(0, Math.round(boneco.y) - 12);
+
+        contexto.fillStyle = "rgba(11, 13, 27, 0.85)";
+        contexto.fillRect(centroX - Math.round(largura / 2), topo, largura, 13);
+        contexto.fillStyle = "#fff8dc";
+        contexto.fillText(nome, centroX, topo + 7);
         contexto.restore();
     }
 
@@ -1336,14 +1367,24 @@ document.addEventListener("DOMContentLoaded", () => {
             tarefa.progresso = 0;
         });
 
+        // Começa sem outros jogadores no mapa (o modo rede preenche logo abaixo).
+        Object.keys(outrosJogadores).forEach((id) => delete outrosJogadores[id]);
+
         if (modoJogo === "rede") {
             // Adversários são os outros jogadores reais; personagem é o escolhido no lobby.
             adversarios.length = 0;
             dadosRede.jogadores.forEach((jogador) => {
+                const saida = posicaoDeSaida(jogador.personagem);
                 if (jogador.id === rede.meuId) {
                     escolherPersonagem(jogador.personagem);
+                    // Cada personagem nasce num ponto diferente da sala principal.
+                    personagem.x = saida.x;
+                    personagem.y = saida.y;
+                    personagem.posicaoAnteriorX = saida.x;
+                    personagem.posicaoAnteriorY = saida.y;
                 } else {
                     adversarios.push({ id: jogador.id, nome: jogador.nome, progresso: 0, ativo: true });
+                    criarOutroJogador(jogador, saida);
                 }
             });
 
@@ -1485,6 +1526,123 @@ document.addEventListener("DOMContentLoaded", () => {
     // Tempo máximo esperando o servidor antes de mostrar "offline".
     // (O Render gratuito pode demorar para "acordar"; se ele responder depois, conecta sozinho.)
     const ESPERA_SERVIDOR_MS = 15000;
+
+    // --- Outros jogadores no mapa (movimentação sincronizada) ---
+
+    // Envia a própria posição ~15 vezes por segundo (a cada 66ms).
+    const INTERVALO_ENVIO_MS = 66;
+    // Desenha os outros um pouco "no passado" (100ms) para sempre ter duas
+    // posições recebidas entre as quais interpolar: o movimento fica suave.
+    const ATRASO_INTERPOLACAO_MS = 100;
+
+    // Outros jogadores da partida, indexados pelo id do socket.
+    const outrosJogadores = {};
+    let ultimoEnvioPosicao = 0;
+    let ultimaPosicaoEnviada = "";
+
+    function criarOutroJogador(jogador, saida) {
+        outrosJogadores[jogador.id] = {
+            nome: jogador.nome,
+            personagemAtual: jogador.personagem,
+            x: saida.x,
+            y: saida.y,
+            direcao: "baixo",
+            andando: false,
+            quadroAnimacao: 0,
+            tempoAnimacao: 0,
+            // Posições recebidas: { tempo, x, y } (tempo do relógio deste navegador).
+            amostras: [{ tempo: performance.now(), x: saida.x, y: saida.y }]
+        };
+    }
+
+    // Guarda uma posição recebida do servidor.
+    function receberPosicao(dados) {
+        const outro = outrosJogadores[dados.id];
+        if (!outro) return;
+
+        // Se o jogador estava parado (sem mensagens), repete a última posição logo
+        // antes da nova: assim o primeiro passo não dá um "pulo".
+        const agora = performance.now();
+        const ultima = outro.amostras[outro.amostras.length - 1];
+        if (agora - ultima.tempo > INTERVALO_ENVIO_MS * 2) {
+            outro.amostras.push({ tempo: agora - INTERVALO_ENVIO_MS, x: ultima.x, y: ultima.y });
+        }
+
+        outro.amostras.push({ tempo: agora, x: dados.x, y: dados.y });
+        // Só as últimas 10 interessam.
+        if (outro.amostras.length > 10) outro.amostras.shift();
+        outro.direcao = dados.direcao;
+        outro.andando = dados.andando;
+    }
+
+    // Calcula onde cada outro jogador está agora, interpolando entre duas amostras.
+    function atualizarOutrosJogadores(deltaTempo) {
+        const momento = performance.now() - ATRASO_INTERPOLACAO_MS;
+
+        Object.values(outrosJogadores).forEach((outro) => {
+            const amostras = outro.amostras;
+            const ultima = amostras[amostras.length - 1];
+
+            // Procura a amostra logo antes do "momento" desenhado.
+            let anterior = amostras[0];
+            let seguinte = ultima;
+            for (let indice = amostras.length - 1; indice > 0; indice -= 1) {
+                if (amostras[indice - 1].tempo <= momento) {
+                    anterior = amostras[indice - 1];
+                    seguinte = amostras[indice];
+                    break;
+                }
+            }
+
+            if (momento >= ultima.tempo || anterior === seguinte) {
+                // Sem posição mais nova: fica parado na última conhecida.
+                outro.x = ultima.x;
+                outro.y = ultima.y;
+            } else {
+                // Interpolação linear entre as duas amostras.
+                const fracao = Math.min(1, Math.max(0,
+                    (momento - anterior.tempo) / (seguinte.tempo - anterior.tempo)));
+                outro.x = anterior.x + (seguinte.x - anterior.x) * fracao;
+                outro.y = anterior.y + (seguinte.y - anterior.y) * fracao;
+            }
+
+            // Animação dos passos igual à do próprio personagem.
+            if (outro.andando && !partida.pausada) {
+                outro.tempoAnimacao += deltaTempo;
+                if (outro.tempoAnimacao > 0.14) {
+                    outro.quadroAnimacao = outro.quadroAnimacao === 0 ? 1 : 0;
+                    outro.tempoAnimacao = 0;
+                }
+            }
+        });
+    }
+
+    function desenharOutrosJogadores() {
+        Object.values(outrosJogadores).forEach((outro) => {
+            desenharBoneco(outro);
+            desenharNome(outro, outro.nome);
+        });
+    }
+
+    // Envia a própria posição, no máximo ~15x/s e só quando algo mudou.
+    function enviarPosicao(tempoAtual) {
+        if (modoJogo !== "rede" || !rede.socket || !rede.online) return;
+        if (!partida.iniciou || partida.encerrada || partida.pausada) return;
+        if (tempoAtual - ultimoEnvioPosicao < INTERVALO_ENVIO_MS) return;
+
+        const dados = {
+            x: Math.round(personagem.x),
+            y: Math.round(personagem.y),
+            direcao: personagem.direcao,
+            andando: personagem.andando
+        };
+        const resumo = `${dados.x},${dados.y},${dados.direcao},${dados.andando}`;
+        if (resumo === ultimaPosicaoEnviada) return;
+
+        ultimoEnvioPosicao = tempoAtual;
+        ultimaPosicaoEnviada = resumo;
+        rede.socket.volatile.emit("jogador:posicao", dados);
+    }
 
     const criarSalaPublica = document.getElementById("create-public-room");
     const criarSalaPrivada = document.getElementById("create-private-room");
@@ -1806,7 +1964,12 @@ document.addEventListener("DOMContentLoaded", () => {
             mostrarAviso(dados.motivo);
         });
 
+        socket.on("jogador:posicao", receberPosicao);
+
         socket.on("jogador:saiu", (dados) => {
+            // Quem saiu some do mapa.
+            delete outrosJogadores[dados.jogadorId];
+
             const adversario = adversarios.find((item) => item.id === dados.jogadorId);
             if (adversario) {
                 adversario.ativo = false;
@@ -1842,8 +2005,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 atualizarPersonagem(Math.min(deltaTempo, 0.05));
                 // Resolve a colisão antes de desenhar, para não haver quadro sobreposto.
                 checarColisao();
+                enviarPosicao(tempoAtual);
             }
+            atualizarOutrosJogadores(Math.min(deltaTempo, 0.05));
             desenharFundo();
+            // Outros jogadores primeiro: o próprio personagem fica sempre por cima.
+            desenharOutrosJogadores();
             desenharPersonagem();
         }
 

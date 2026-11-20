@@ -44,12 +44,12 @@ O servidor nunca entrega `server/` nem arquivos/pastas começando com ponto (com
 Seções do `script.js` (cada uma com comentário de cabeçalho):
 
 1. Navegação e configurações — `abrirTela(id)`, botões `data-screen`, volume/efeitos.
-2. Personagem — `personagem`, `escolherPersonagem()`, `aplicarVelocidade()`, `desenharPersonagem()`, `atualizarPersonagem(delta)`.
+2. Personagem — `personagem`, `posicaoDeSaida()`, `escolherPersonagem()`, `aplicarVelocidade()`, `desenharBoneco()` (qualquer jogador), `desenharNome()`, `atualizarPersonagem(delta)`.
 3. Mapa — `paredes`, `portas`, `obstaculos`, `caixaColisao()` (hitbox 28×28 nos pés), `checarColisao()`, `desenharFundo()`.
 4. Eventos — `eventosAleatorios`, `iniciarEvento()` (sorteio solo), `aplicarEvento(id, duração, portas)`, `finalizarEvento()`, `agendarProximoEvento()`.
 5. Tarefas — `tarefas`, `objetosColetaveis`, `interface<Tarefa>()`, `concluirTarefa()` (rede: pede validação), `marcarTarefaConcluida()`.
 6. Partida — `modoJogo` ("solo" | "rede"), `iniciarPartida(modo, dados)`, `atualizarPartida()` (só solo), `verificarResultado()`, `pausarPartida()`/`congelarPartida()`.
-7. Salas — objeto `rede`, `salasRede`, `exibirLobby()`, `conectarServidor()` (carrega o cliente Socket.IO) e `iniciarSocket()` (todos os `socket.on`).
+7. Salas — objeto `rede`, `outrosJogadores` (posições recebidas + interpolação de 100ms em `atualizarOutrosJogadores()`), `enviarPosicao()` (~15x/s), `salasRede`, `exibirLobby()`, `conectarServidor()` (carrega o cliente Socket.IO) e `iniciarSocket()` (todos os `socket.on`).
 8. Loop principal e inicialização — `executarJogo(tempo)` via `requestAnimationFrame`.
 
 O `server/index.js` repete algumas regras do cliente (seção "REGRAS", ex.: tarefas, durações dos eventos, portas travadas). Ao mudar uma regra, mude nos dois arquivos.

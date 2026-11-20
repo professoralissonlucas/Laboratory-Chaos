@@ -139,7 +139,14 @@ Salas: Computadores, Principal, Energia, Segurança e Reator (porta do **Reator 
 - **Multiplayer**: adversários são os outros jogadores (progresso real); o resultado vem do servidor (`partida:fim`). Se a conexão cair, `jogadorAtivo = false` → derrota.
 - Pausa completa (movimento, relógio, eventos, bip). No multiplayer só o anfitrião pausa, e pausa para todos.
 
-### 5.8 Salas (cliente)
+### 5.8 Movimentação sincronizada (multiplayer)
+- Cada personagem (0–4) nasce num ponto da sala principal: `posicaoDeSaida(i)` = `{ x: 296 + 40·i, y: 288 }`.
+- `enviarPosicao()` manda `{ x, y, direcao, andando }` a cada 66ms (~15x/s), só quando algo mudou, sem enviar com o jogo pausado ou encerrado (`volatile`: mensagens velhas são descartadas).
+- `outrosJogadores` guarda as últimas 10 posições recebidas de cada um. `atualizarOutrosJogadores()` desenha cada um **100ms no passado**, interpolando entre as duas posições ao redor desse momento (fica parado na última se não chegar nada novo).
+- `desenharBoneco()` desenha qualquer jogador com o personagem escolhido; `desenharNome()` põe uma plaquinha escura com o nome acima da cabeça. O próprio personagem é desenhado por último (fica por cima) e sem plaquinha.
+- Outros jogadores não colidem entre si nem com o jogador.
+
+### 5.9 Salas (cliente)
 Objeto `rede` (socket, online, meuId, sala, publicas) e `salasRede` (criar, entrar, sair, trocarPersonagem, iniciar). `conectarServidor()` registra todos os `socket.on`. O lobby mostra jogadores, anfitrião, "VOCÊ", personagens ocupados e só libera INICIAR PARTIDA para o anfitrião com 3+ jogadores.
 
 ---
@@ -157,8 +164,9 @@ Objeto `rede` (socket, online, meuId, sala, publicas) e `salasRede` (criar, entr
 - Saída/desconexão: no lobby remove; na partida fica inativo; se era anfitrião, o próximo ativo assume; sala vazia é apagada. Partida em andamento não aceita novos jogadores.
 
 ### Eventos Socket.IO
-- Cliente → servidor: `sala:criar`, `sala:entrar`, `sala:sair`, `sala:personagem`, `partida:iniciar`, `partida:pausar`, `evento:testar`, `coletavel:pegar`, `tarefa:concluir`.
-- Servidor → cliente: `salas:publicas`, `sala:atualizada`, `partida:iniciada`, `partida:estado`, `partida:pausada`, `evento:iniciado`, `evento:finalizado`, `progresso:atualizado`, `tarefa:confirmada`, `tarefa:recusada`, `jogador:saiu`, `partida:fim`.
+- Cliente → servidor: `sala:criar`, `sala:entrar`, `sala:sair`, `sala:personagem`, `partida:iniciar`, `partida:pausar`, `evento:testar`, `coletavel:pegar`, `tarefa:concluir`, `jogador:posicao`.
+- Servidor → cliente: `salas:publicas`, `sala:atualizada`, `partida:iniciada`, `partida:estado`, `partida:pausada`, `evento:iniciado`, `evento:finalizado`, `progresso:atualizado`, `tarefa:confirmada`, `tarefa:recusada`, `jogador:saiu`, `partida:fim`, `jogador:posicao` (repassado para os outros da sala, com `id`).
+- `jogador:posicao` no servidor: só com a partida rodando e sem pausa; ignora mensagens com menos de 40ms de intervalo; descarta números inválidos; limita x a 0–752 e y a 0–432; direção inválida vira "baixo".
 
 ---
 
@@ -183,10 +191,11 @@ Objeto `rede` (socket, online, meuId, sala, publicas) e `salasRede` (criar, entr
 4. O gás pode prender o personagem se ele estiver dentro da área quando o evento começa.
 5. Na diagonal o personagem não desliza pela parede; teclas podem ficar "presas" se a janela perde o foco.
 6. Sem controles de toque: no celular a interface cabe na tela, mas não dá para andar.
-7. Multiplayer: outros jogadores não aparecem no mapa (só no painel); sem reconexão (recarregar a página = sair da partida).
-10. Render gratuito "dorme" sem uso: a primeira conexão pode passar dos 15s e mostrar "offline" antes de conectar sozinho.
-8. Multiplayer: o servidor não valida os cliques dos minijogos nem a posição do jogador.
+7. Multiplayer: sem reconexão (recarregar a página = sair da partida).
+8. Multiplayer: o servidor não valida os cliques dos minijogos; a posição só é limitada ao mapa (não confere paredes nem velocidade, então um cliente modificado poderia "teleportar").
 9. Pasta `assets/` vazia; sprites e sons são gerados por código.
+10. Render gratuito "dorme" sem uso: a primeira conexão pode passar dos 15s e mostrar "offline" antes de conectar sozinho.
+11. Multiplayer: as plaquinhas de nome se sobrepõem quando dois jogadores ficam muito próximos.
 
 ---
 
