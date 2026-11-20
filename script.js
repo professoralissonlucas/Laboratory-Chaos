@@ -12,7 +12,8 @@
 //   5. Tarefas
 //   6. Partida
 //   7. Salas
-//   8. Loop principal e inicialização
+//   8. Celular (controles de toque, gaveta de painéis e tela cheia)
+//   9. Loop principal e inicialização
 // =====================================================================
 
 // Aguarda o carregamento completo do HTML antes de executar o código.
@@ -46,6 +47,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (telaSelecionada) {
             telaSelecionada.classList.add("active");
         }
+
+        // No celular, a partida trava a rolagem da página (ver style.css).
+        document.body.classList.toggle("em-partida", nomeDaTela === "play-screen");
+        document.body.classList.remove("paineis-abertos");
     }
 
     // Faz os botões do menu e os botões "Voltar" funcionarem.
@@ -138,11 +143,15 @@ document.addEventListener("DOMContentLoaded", () => {
             teclasPressionadas[tecla] = true;
         }
 
-        if (tecla === "e" && !evento.repeat && modalTarefa && modalTarefa.hidden &&
-            !partida.pausada && !partida.encerrada) {
+        if (tecla === "e" && !evento.repeat) interagir();
+    });
+
+    // Tecla E ou botão E da tela de toque: interage com o que estiver perto.
+    function interagir() {
+        if (modalTarefa && modalTarefa.hidden && !partida.pausada && !partida.encerrada) {
             verificarInteracaoTarefa();
         }
-    });
+    }
 
     window.addEventListener("keyup", (evento) => {
         teclasPressionadas[evento.key.toLowerCase()] = false;
@@ -152,6 +161,10 @@ document.addEventListener("DOMContentLoaded", () => {
     function soltarTeclas() {
         Object.keys(teclasPressionadas).forEach((tecla) => {
             teclasPressionadas[tecla] = false;
+        });
+        // O direcional de toque também volta ao normal.
+        document.querySelectorAll(".dpad-arm.pressionado").forEach((braco) => {
+            braco.classList.remove("pressionado");
         });
     }
     window.addEventListener("blur", soltarTeclas);
@@ -254,22 +267,85 @@ document.addEventListener("DOMContentLoaded", () => {
         contexto.restore();
     }
 
-    // Plaquinha com o nome acima da cabeça (fundo escuro, texto claro, sem cantos arredondados).
-    function desenharNome(boneco, nome) {
+    // Tamanho da letra das plaquinhas, em pixels do canvas. O canvas é
+    // reduzido pelo CSS (no celular fica bem menor que 800px); a letra cresce
+    // na mesma proporção para continuar com ~11px na tela (máximo de 18).
+    function tamanhoFonteNome() {
+        const larguraNaTela = canvas.clientWidth || canvas.width;
+        return Math.min(18, Math.max(11, Math.round(11 * canvas.width / larguraNaTela)));
+    }
+
+    function fonteNome() {
+        return `bold ${tamanhoFonteNome()}px 'Courier New', monospace`;
+    }
+
+    // Retângulo da plaquinha no lugar normal: centralizada acima da cabeça.
+    function plaquinhaDoNome(boneco, nome) {
         contexto.save();
-        contexto.font = "bold 11px 'Courier New', monospace";
+        contexto.font = fonteNome();
+        const largura = Math.ceil(contexto.measureText(nome).width) + 8;
+        contexto.restore();
+
+        const altura = tamanhoFonteNome() + 2;
+        const centroX = Math.round(boneco.x + personagem.tamanho / 2);
+        const topo = Math.max(0, Math.round(boneco.y) - altura + 1);
+        return { x: centroX - Math.round(largura / 2), y: topo, largura, altura, topoNormal: topo };
+    }
+
+    // Plaquinha com o nome (fundo escuro, texto claro, sem cantos arredondados).
+    // "placa" vem de plaquinhaDoNome(); se ela foi empurrada para cima para não
+    // sobrepor outra, um tracinho liga a plaquinha à cabeça do boneco.
+    function desenharNome(boneco, nome, placa) {
+        const caixa = placa || plaquinhaDoNome(boneco, nome);
+        const centroX = caixa.x + Math.round(caixa.largura / 2);
+
+        contexto.save();
+        contexto.font = fonteNome();
         contexto.textAlign = "center";
         contexto.textBaseline = "middle";
 
-        const largura = Math.ceil(contexto.measureText(nome).width) + 8;
-        const centroX = Math.round(boneco.x + personagem.tamanho / 2);
-        const topo = Math.max(0, Math.round(boneco.y) - 12);
+        if (caixa.y < caixa.topoNormal) {
+            contexto.fillStyle = "rgba(11, 13, 27, 0.85)";
+            contexto.fillRect(centroX - 1, caixa.y + caixa.altura, 2, caixa.topoNormal - caixa.y);
+        }
 
         contexto.fillStyle = "rgba(11, 13, 27, 0.85)";
-        contexto.fillRect(centroX - Math.round(largura / 2), topo, largura, 13);
+        contexto.fillRect(caixa.x, caixa.y, caixa.largura, caixa.altura);
         contexto.fillStyle = "#fff8dc";
-        contexto.fillText(nome, centroX, topo + 7);
+        contexto.fillText(nome, centroX, caixa.y + Math.round(caixa.altura / 2) + 1);
         contexto.restore();
+    }
+
+    // Evita plaquinhas sobrepostas: quem está mais embaixo no mapa fica no
+    // lugar normal; as outras sobem (ou descem, se não couberem no topo)
+    // até achar um espaço livre. Devolve uma plaquinha para cada boneco.
+    function organizarPlaquinhas(bonecos) {
+        const passo = tamanhoFonteNome() + 3;
+        const deslocamentos = [0, -passo, -passo * 2, -passo * 3, -passo * 4, passo, passo * 2];
+        const colocadas = [];
+
+        const sobrepoe = (a, b) => a.x < b.x + b.largura && a.x + a.largura > b.x &&
+            a.y < b.y + b.altura && a.y + a.altura > b.y;
+
+        // Do mais embaixo para o mais em cima.
+        const ordem = [...bonecos].sort((a, b) => b.y - a.y);
+
+        return new Map(ordem.map((boneco) => {
+            const normal = plaquinhaDoNome(boneco, boneco.nome);
+            let escolhida = normal;
+
+            for (const deslocamento of deslocamentos) {
+                const tentativa = { ...normal, y: normal.y + deslocamento };
+                const dentroDoMapa = tentativa.y >= 0 && tentativa.y + tentativa.altura <= canvas.height;
+                if (dentroDoMapa && !colocadas.some((outra) => sobrepoe(tentativa, outra))) {
+                    escolhida = tentativa;
+                    break;
+                }
+            }
+
+            colocadas.push(escolhida);
+            return [boneco, escolhida];
+        }));
     }
 
     // Atualiza posição e animação usando o tempo real entre dois quadros.
@@ -1152,7 +1228,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (modoJogo === "rede" && rede.socket) rede.socket.emit("coletavel:pegar", { tipo, indice });
     }
 
-    function verificarInteracaoTarefa() {
+    // Descobre o que o E vai acionar agora: a tarefa ou o coletável mais
+    // próximo, ao alcance e na mesma sala. Devolve null se não houver nada.
+    // O resultado traz a ação e o retângulo do desenho (usado no destaque).
+    function alvoDaInteracao() {
         // Distâncias medidas a partir do centro do personagem.
         // Os raios cresceram 15px porque meio corpo (24px) agora entra na conta.
         const centroX = personagem.x + personagem.tamanho / 2;
@@ -1165,19 +1244,22 @@ document.addEventListener("DOMContentLoaded", () => {
         // (Antes as tarefas tinham prioridade e escondiam os coletáveis vizinhos.)
         const candidatos = [];
 
-        function considerar(alvo, raio, acao) {
+        // "desenho" é o retângulo { x, y, largura, altura } do objeto no mapa.
+        function considerar(alvo, raio, desenho, acao) {
             if (salaDoPonto(alvo.x, alvo.y) !== salaDoJogador) return;
             const distancia = Math.hypot(centroX - alvo.x, centroY - alvo.y);
-            if (distancia < raio) candidatos.push({ distancia, acao });
+            if (distancia < raio) candidatos.push({ distancia, desenho, acao });
         }
 
         tarefas.forEach((tarefa) => {
-            considerar(tarefa, raioTarefa, () => abrirTarefa(tarefa));
+            const desenho = { x: tarefa.x - 10, y: tarefa.y - 10, largura: 20, altura: 20 };
+            considerar(tarefa, raioTarefa, desenho, () => abrirTarefa(tarefa));
         });
 
         objetosColetaveis.frascos.forEach((frasco, indice) => {
             if (frasco.coletado) return;
-            considerar(frasco, raioColeta, () => {
+            const desenho = { x: frasco.x - 8, y: frasco.y - 12, largura: 16, altura: 20 };
+            considerar(frasco, raioColeta, desenho, () => {
                 frasco.coletado = true;
                 avisarColeta("frascos", indice);
                 const frascosColetados = objetosColetaveis.frascos.filter((item) => item.coletado).length;
@@ -1187,7 +1269,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         objetosColetaveis.cartoes.forEach((cartao, indice) => {
             if (cartao.coletado) return;
-            considerar(cartao, raioColeta, () => {
+            const desenho = { x: cartao.x - 10, y: cartao.y - 7, largura: 20, altura: 14 };
+            considerar(cartao, raioColeta, desenho, () => {
                 cartao.coletado = true;
                 avisarColeta("cartoes", indice);
                 const encontrados = objetosColetaveis.cartoes.filter((item) => item.coletado).length;
@@ -1195,13 +1278,57 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         });
 
-        if (candidatos.length === 0) {
+        if (candidatos.length === 0) return null;
+        candidatos.sort((a, b) => a.distancia - b.distancia);
+        return candidatos[0];
+    }
+
+    // Tecla E: aciona o alvo escolhido por alvoDaInteracao().
+    function verificarInteracaoTarefa() {
+        const alvo = alvoDaInteracao();
+        if (!alvo) {
             mostrarAviso("Aproxime-se de um objeto ou tarefa e pressione E.");
             return;
         }
+        alvo.acao();
+    }
 
-        candidatos.sort((a, b) => a.distancia - b.distancia);
-        candidatos[0].acao();
+    // Contorno piscando em volta do que o E vai acionar (só com o jogo
+    // rodando e sem minijogo aberto). Alterna amarelo e rosa da paleta,
+    // com borda preta por fora, no mesmo estilo pixel art do mapa.
+    function desenharDestaqueInteracao() {
+        if (!partida.iniciou || partida.pausada || partida.encerrada) return;
+        if (modalTarefa && !modalTarefa.hidden) return;
+        // No apagão o mapa fica escuro: o destaque não entrega os objetos.
+        if (estadoEvento.ativo === "apagao") return;
+
+        const alvo = alvoDaInteracao();
+        if (!alvo) return;
+
+        const folga = 4;
+        const espessura = 3;
+        const caixa = {
+            x: alvo.desenho.x - folga,
+            y: alvo.desenho.y - folga,
+            largura: alvo.desenho.largura + folga * 2,
+            altura: alvo.desenho.altura + folga * 2
+        };
+
+        // Pisca a cada 250ms trocando de cor (--yellow e --pink).
+        const cor = Math.floor(performance.now() / 250) % 2 === 0 ? "#f4d35e" : "#ed87b8";
+
+        // Moldura preta por fora e colorida por dentro, feita com retângulos.
+        desenharMoldura(caixa.x - 1, caixa.y - 1, caixa.largura + 2, caixa.altura + 2, espessura + 2, "#0b0d1b");
+        desenharMoldura(caixa.x, caixa.y, caixa.largura, caixa.altura, espessura, cor);
+    }
+
+    // Desenha só a borda de um retângulo (4 faixas), sem cantos arredondados.
+    function desenharMoldura(x, y, largura, altura, espessura, cor) {
+        contexto.fillStyle = cor;
+        contexto.fillRect(x, y, largura, espessura);
+        contexto.fillRect(x, y + altura - espessura, largura, espessura);
+        contexto.fillRect(x, y, espessura, altura);
+        contexto.fillRect(x + largura - espessura, y, espessura, altura);
     }
 
     // =================================================================
@@ -1247,6 +1374,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const pauseOverlay = document.getElementById("pause-overlay");
     const resultOverlay = document.getElementById("result-overlay");
     const pauseButton = document.getElementById("pause-button");
+    // Pausa da barra do topo no celular (mesma ação do botão PAUSAR).
+    const botaoPausaToque = document.getElementById("touch-pause-button");
     const botaoContinuar = document.getElementById("resume-button");
     const mensagemPausa = document.getElementById("pause-message");
     const botaoJogarNovamente = document.getElementById("restart-button");
@@ -1255,6 +1384,7 @@ document.addEventListener("DOMContentLoaded", () => {
     function atualizarControlesAnfitriao() {
         const podeControlar = modoJogo === "solo" || souAnfitriao();
         pauseButton.hidden = !podeControlar;
+        botaoPausaToque.hidden = !podeControlar;
         botaoContinuar.hidden = !podeControlar;
         if (botaoTestarEvento) botaoTestarEvento.hidden = !podeControlar;
         mensagemPausa.textContent = podeControlar
@@ -1542,6 +1672,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     pauseButton.addEventListener("click", pausarPartida);
+    botaoPausaToque.addEventListener("click", pausarPartida);
     botaoContinuar.addEventListener("click", continuarPartida);
 
     // Volta ao menu no meio da partida: para o evento (e o bip do alarme),
@@ -1690,8 +1821,14 @@ document.addEventListener("DOMContentLoaded", () => {
     function desenharOutrosJogadores() {
         Object.values(outrosJogadores).forEach((outro) => {
             desenharBoneco(outro);
-            desenharNome(outro, outro.nome);
         });
+    }
+
+    // As plaquinhas são desenhadas por último (por cima de todos os bonecos),
+    // já organizadas para não se sobreporem.
+    function desenharNomesOutrosJogadores() {
+        const placas = organizarPlaquinhas(Object.values(outrosJogadores));
+        placas.forEach((placa, outro) => desenharNome(outro, outro.nome, placa));
     }
 
     // Envia a própria posição, no máximo ~15x/s e só quando algo mudou.
@@ -1885,6 +2022,21 @@ document.addEventListener("DOMContentLoaded", () => {
         salasRede.entrar(codigo);
     });
 
+    // A tecla "Ir"/Enter do teclado do celular também entra na sala.
+    codigoSalaInput.addEventListener("keydown", (evento) => {
+        if (evento.key === "Enter") {
+            evento.preventDefault();
+            entrarSalaBotao.click();
+        }
+    });
+
+    // Quando o teclado do celular abre, centraliza o campo e o botão ENTRAR.
+    codigoSalaInput.addEventListener("focus", () => {
+        window.setTimeout(() => {
+            codigoSalaInput.closest(".join-panel").scrollIntoView({ block: "center", behavior: "smooth" });
+        }, 300);
+    });
+
     document.getElementById("leave-room-button").addEventListener("click", () => salasRede.sair());
     seletorLobby.addEventListener("change", () => salasRede.trocarPersonagem(Number(seletorLobby.value)));
     botaoIniciarPartida.addEventListener("click", () => salasRede.iniciar());
@@ -2063,7 +2215,188 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // =================================================================
-    // 8. LOOP PRINCIPAL E INICIALIZAÇÃO
+    // 8. CELULAR (controles de toque, gaveta de painéis e tela cheia)
+    // =================================================================
+
+    // Tela de toque (celular/tablet). O visual vem do CSS (pointer: coarse);
+    // aqui só fica o que precisa de JavaScript.
+    const consultaToque = window.matchMedia("(pointer: coarse)");
+    const consultaRetrato = window.matchMedia("(orientation: portrait)");
+    const barraPersonagem = document.getElementById("match-toolbar");
+    const molduraCanvas = document.querySelector(".canvas-frame");
+    const painelGaveta = document.getElementById("match-panels");
+    const cabecalhoGaveta = painelGaveta.querySelector(".panels-header");
+    const botaoPaineis = document.getElementById("panels-button");
+
+    // No toque, a barra de personagem/velocidade vai para dentro da gaveta
+    // (no computador fica acima do mapa, como sempre).
+    function organizarLayoutToque() {
+        if (consultaToque.matches) {
+            cabecalhoGaveta.after(barraPersonagem);
+        } else {
+            molduraCanvas.before(barraPersonagem);
+        }
+    }
+
+    // Mudanças de "toque" (ex.: tablet com teclado) e de orientação.
+    consultaToque.addEventListener("change", organizarLayoutToque);
+    // Girar o aparelho com o dedo no direcional não deixa o boneco andando sozinho.
+    consultaRetrato.addEventListener("change", soltarTeclas);
+
+    // --- Gaveta de painéis (adversários, evento, tarefas, opções) ---
+    function abrirPaineis(abrir) {
+        document.body.classList.toggle("paineis-abertos", abrir);
+        botaoPaineis.setAttribute("aria-expanded", String(abrir));
+        soltarTeclas();
+    }
+
+    botaoPaineis.addEventListener("click", () => {
+        abrirPaineis(!document.body.classList.contains("paineis-abertos"));
+    });
+    document.getElementById("panels-close").addEventListener("click", () => abrirPaineis(false));
+
+    // Resumo numa linha (barra do topo): tarefas e o evento ou aviso do momento.
+    // Acompanha o painel de evento e o contador sem mexer na lógica deles.
+    const resumoToque = document.getElementById("touch-summary");
+
+    function atualizarResumoToque() {
+        const textoTarefas = `TAREFAS ${contadorTarefas.textContent}`;
+        const nome = nomeEvento.textContent;
+        const normal = nome === "SISTEMA NORMAL";
+        resumoToque.textContent = normal ? textoTarefas : `${textoTarefas} • ${nome}: ${mensagemEvento.textContent}`;
+        resumoToque.classList.toggle("alerta", !normal);
+    }
+
+    const observadorResumo = new MutationObserver(atualizarResumoToque);
+    [nomeEvento, mensagemEvento, contadorTarefas].forEach((elemento) => {
+        observadorResumo.observe(elemento, { childList: true, characterData: true, subtree: true });
+    });
+
+    // --- Direcional (D-pad) ---
+    // Funciona como um joystick: a direção sai da posição do dedo em relação
+    // ao centro, em 8 setores (inclui diagonais). Ele só "aperta" as setas no
+    // mesmo objeto teclasPressionadas do teclado: o movimento é o mesmo.
+    const direcional = document.getElementById("dpad");
+    let dedoNoDirecional = null;
+
+    function aplicarDirecional(evento) {
+        const area = direcional.getBoundingClientRect();
+        const dx = evento.clientX - (area.left + area.width / 2);
+        const dy = evento.clientY - (area.top + area.height / 2);
+        const zonaMorta = area.width * 0.12;
+
+        let cima = false;
+        let baixo = false;
+        let esquerda = false;
+        let direita = false;
+
+        if (Math.hypot(dx, dy) > zonaMorta) {
+            // Setor 0 = direita, 2 = baixo, 4/-4 = esquerda, -2 = cima; ímpares = diagonais.
+            const setor = Math.round(Math.atan2(dy, dx) / (Math.PI / 4));
+            direita = [-1, 0, 1].includes(setor);
+            baixo = [1, 2, 3].includes(setor);
+            esquerda = [3, 4, -4, -3].includes(setor);
+            cima = [-3, -2, -1].includes(setor);
+        }
+
+        teclasPressionadas.arrowup = cima;
+        teclasPressionadas.arrowdown = baixo;
+        teclasPressionadas.arrowleft = esquerda;
+        teclasPressionadas.arrowright = direita;
+
+        const pressionados = { cima, baixo, esquerda, direita };
+        direcional.querySelectorAll(".dpad-arm").forEach((braco) => {
+            braco.classList.toggle("pressionado", pressionados[braco.dataset.direcao]);
+        });
+    }
+
+    function soltarDirecional(evento) {
+        if (evento.pointerId !== dedoNoDirecional) return;
+        dedoNoDirecional = null;
+        ["arrowup", "arrowdown", "arrowleft", "arrowright"].forEach((tecla) => {
+            teclasPressionadas[tecla] = false;
+        });
+        direcional.querySelectorAll(".dpad-arm").forEach((braco) => braco.classList.remove("pressionado"));
+    }
+
+    direcional.addEventListener("pointerdown", (evento) => {
+        evento.preventDefault();
+        if (dedoNoDirecional !== null) return;
+        dedoNoDirecional = evento.pointerId;
+        // Captura: o dedo pode escorregar para fora do direcional sem soltar.
+        direcional.setPointerCapture(evento.pointerId);
+        aplicarDirecional(evento);
+    });
+
+    direcional.addEventListener("pointermove", (evento) => {
+        if (evento.pointerId === dedoNoDirecional) aplicarDirecional(evento);
+    });
+
+    ["pointerup", "pointercancel", "lostpointercapture"].forEach((tipo) => {
+        direcional.addEventListener(tipo, soltarDirecional);
+    });
+
+    // --- Botão E ---
+    const botaoE = document.getElementById("touch-e-button");
+
+    botaoE.addEventListener("pointerdown", (evento) => {
+        evento.preventDefault();
+        botaoE.classList.add("pressionado");
+        interagir();
+    });
+    ["pointerup", "pointercancel", "pointerleave"].forEach((tipo) => {
+        botaoE.addEventListener(tipo, () => botaoE.classList.remove("pressionado"));
+    });
+
+    // Toque longo nos controles não abre menu do navegador.
+    const controlesToque = document.querySelector(".touch-controls");
+    controlesToque.addEventListener("contextmenu", (evento) => evento.preventDefault());
+
+    // Cancela o "clique fantasma": depois do toque o navegador dispara um click
+    // no mesmo ponto, que cairia no botão FECHAR do minijogo recém-aberto.
+    controlesToque.addEventListener("touchstart", (evento) => evento.preventDefault(), { passive: false });
+
+    // --- Tela cheia (Fullscreen API; o iPhone não tem, então o botão some) ---
+    const botoesTelaCheia = document.querySelectorAll(".fullscreen-button");
+    const suportaTelaCheia = Boolean(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+
+    function emTelaCheia() {
+        return Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+    }
+
+    function atualizarBotoesTelaCheia() {
+        botoesTelaCheia.forEach((botao) => {
+            botao.hidden = !suportaTelaCheia;
+            // O botão grande (computador) tem texto; o da barra do celular, só o ícone.
+            if (!botao.classList.contains("touch-bar-button")) {
+                botao.textContent = emTelaCheia() ? "⛶ SAIR DA TELA CHEIA" : "⛶ TELA CHEIA";
+            }
+        });
+    }
+
+    async function alternarTelaCheia() {
+        try {
+            if (emTelaCheia()) {
+                await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+                return;
+            }
+            const raiz = document.documentElement;
+            await (raiz.requestFullscreen || raiz.webkitRequestFullscreen).call(raiz);
+            // No celular, tenta deixar a tela deitada (nem todo navegador permite).
+            if (screen.orientation && screen.orientation.lock) {
+                screen.orientation.lock("landscape").catch(() => {});
+            }
+        } catch (erro) {
+            console.log("O navegador não permitiu a tela cheia.");
+        }
+    }
+
+    botoesTelaCheia.forEach((botao) => botao.addEventListener("click", alternarTelaCheia));
+    document.addEventListener("fullscreenchange", atualizarBotoesTelaCheia);
+    document.addEventListener("webkitfullscreenchange", atualizarBotoesTelaCheia);
+
+    // =================================================================
+    // 9. LOOP PRINCIPAL E INICIALIZAÇÃO
     // =================================================================
 
     let ultimoTempo = 0;
@@ -2088,6 +2421,9 @@ document.addEventListener("DOMContentLoaded", () => {
             // Outros jogadores primeiro: o próprio personagem fica sempre por cima.
             desenharOutrosJogadores();
             desenharPersonagem();
+            // Destaque por cima dos bonecos: a marca pode estar sob o personagem.
+            desenharDestaqueInteracao();
+            desenharNomesOutrosJogadores();
         }
 
         requestAnimationFrame(executarJogo);
@@ -2100,6 +2436,9 @@ document.addEventListener("DOMContentLoaded", () => {
     atualizarPainelAdversarios();
     atualizarCronometro();
     atualizarControlesAnfitriao();
+    organizarLayoutToque();
+    atualizarResumoToque();
+    atualizarBotoesTelaCheia();
     conectarServidor();
 
     if (contexto) {

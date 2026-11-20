@@ -19,6 +19,8 @@
 body {
     margin: 0;
     min-height: 100vh;
+    /* dvh: altura real visível no celular (sem a barra do navegador). */
+    min-height: 100dvh;
     overflow-x: hidden;
     display: flex;
     align-items: center;
@@ -91,11 +93,26 @@ body {
     display: none;
     width: 100%;
     min-height: 100vh;
+    min-height: 100dvh;
     align-items: center;
     justify-content: center;
     position: relative;
     z-index: 1;
-    padding: 24px;
+    /* Nunca menos que a área segura (notch e cantos arredondados da tela). */
+    padding:
+        max(24px, env(safe-area-inset-top))
+        max(24px, env(safe-area-inset-right))
+        max(24px, env(safe-area-inset-bottom))
+        max(24px, env(safe-area-inset-left));
+}
+
+/* Toque duplo nos botões não dá zoom e o toque não pisca em cinza. */
+button,
+select,
+input,
+label {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .screen.active {
@@ -592,7 +609,7 @@ h1 span {
     background: #1b2038;
     border: 4px solid #777f98;
 }
-.match-hud > div:last-child { text-align: right; }
+.match-hud > div:nth-child(3) { text-align: right; }
 .hud-label { display: block; color: var(--gray); font-size: 11px; }
 .match-clock {
     min-width: 112px;
@@ -704,7 +721,7 @@ h1 span {
     background: #343d68;
     border: 3px solid #171a31;
 }
-.public-room button { padding: 8px; }
+.public-room button { min-height: 44px; padding: 8px 12px; }
 .room-lobby[hidden] { display: none; }
 .lobby-header {
     display: flex;
@@ -744,11 +761,15 @@ h1 span {
     opacity: 0.5;
     cursor: not-allowed;
 }
-#room-feedback { min-height: 20px; color: var(--yellow); }
+#room-feedback { min-height: 20px; margin: 10px 0 0; color: var(--yellow); }
 
 @media (max-width: 700px) {
     .screen {
-        padding: 16px;
+        padding:
+            max(16px, env(safe-area-inset-top))
+            max(16px, env(safe-area-inset-right))
+            max(16px, env(safe-area-inset-bottom))
+            max(16px, env(safe-area-inset-left));
     }
 
     .menu-window {
@@ -838,9 +859,416 @@ h1 span {
         grid-template-columns: 1fr;
     }
 
+    /* O campo de código fica ao lado do ENTRAR: o teclado do celular
+       não esconde o botão. */
     .room-actions,
-    .join-row,
     .lobby-players,
     .public-room { grid-template-columns: 1fr; }
     .lobby-header { flex-direction: column; }
+}
+
+/* =====================================================================
+   CELULAR E TOQUE
+   Tudo abaixo só muda algo em telas de toque (pointer: coarse).
+   No computador estes elementos ficam escondidos.
+   ===================================================================== */
+
+.touch-bar,
+.panels-header,
+.touch-controls,
+.rotate-notice {
+    display: none;
+}
+
+/* Botões do fim da tela de partida (pausar, tela cheia, voltar). */
+.match-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+/* O script.js esconde a tela cheia quando o navegador não suporta. */
+.fullscreen-button[hidden],
+.touch-bar-button[hidden] {
+    display: none;
+}
+
+#room-code-input {
+    text-transform: uppercase;
+}
+
+@media (pointer: coarse) {
+    /* Sem teclado físico, a ajuda de teclas não faz sentido. */
+    .keyboard-help {
+        display: none;
+    }
+
+    /* Alvos de toque com pelo menos 44px. Fonte de 16px nos campos:
+       abaixo disso o iPhone dá zoom ao tocar no campo. */
+    .back-button,
+    .test-toolbar select,
+    .join-row input {
+        min-height: 44px;
+    }
+
+    .test-toolbar select,
+    .join-row input {
+        font-size: 16px;
+    }
+
+    .test-toolbar input[type="range"],
+    .settings-card input[type="range"],
+    .toggle-row {
+        min-height: 44px;
+    }
+}
+
+/* ---------- Partida com o celular deitado ---------- */
+@media (pointer: coarse) and (orientation: landscape) {
+    /* A página da partida não rola, não dá zoom nem seleciona texto. */
+    body.em-partida {
+        overflow: hidden;
+        overscroll-behavior: none;
+    }
+
+    body.em-partida #play-screen {
+        position: fixed;
+        inset: 0;
+        min-height: 0;
+        padding: 0;
+        touch-action: none;
+        -webkit-user-select: none;
+        user-select: none;
+    }
+
+    #play-screen .play-window {
+        --altura-barra: 56px;
+        width: 100%;
+        max-width: none;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding:
+            env(safe-area-inset-top)
+            env(safe-area-inset-right)
+            env(safe-area-inset-bottom)
+            env(safe-area-inset-left);
+        border: 0;
+        box-shadow: none;
+        background: var(--night);
+    }
+
+    #play-screen .play-window > h2 {
+        display: none;
+    }
+
+    /* HUD vira uma barra fina no topo: relógio, ativos, resumo e botões. */
+    #play-screen .match-hud {
+        order: -1;
+        flex: none;
+        width: 100%;
+        height: var(--altura-barra);
+        grid-template-columns: auto auto minmax(0, 1fr);
+        gap: 10px;
+        margin: 0;
+        padding: 4px 8px;
+        border-width: 0 0 4px;
+    }
+
+    #play-screen .match-hud > div:first-child {
+        display: none;
+    }
+
+    #play-screen .match-clock {
+        grid-column: auto;
+        order: 0;
+        min-width: 0;
+        padding: 2px 8px;
+        border-width: 3px;
+        font-size: 18px;
+    }
+
+    #play-screen .match-hud > div:nth-child(3) {
+        text-align: left;
+        white-space: nowrap;
+    }
+
+    #play-screen .match-hud .hud-label {
+        font-size: 10px;
+    }
+
+    #play-screen .touch-bar {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        min-width: 0;
+    }
+
+    .touch-summary {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        color: var(--yellow);
+        font-size: 12px;
+        font-weight: bold;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
+
+    .touch-summary.alerta {
+        color: var(--pink);
+    }
+
+    .touch-bar-button {
+        flex: none;
+        min-width: 44px;
+        height: 44px;
+        padding: 0 10px;
+        border: 3px solid #0b0d1b;
+        background: var(--yellow);
+        color: var(--night);
+        box-shadow: 3px 3px 0 #171a31;
+        font-family: "Courier New", monospace;
+        font-size: 15px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+
+    .touch-bar-button:active {
+        transform: translate(2px, 2px);
+        box-shadow: 1px 1px 0 #171a31;
+    }
+
+    /* Canvas: o maior possível em 5:3 no espaço abaixo da barra.
+       (altura livre - 12px da borda) * 5/3 + 12px = largura que cabe. */
+    #play-screen .canvas-frame {
+        flex: none;
+        width: min(
+            calc(100% - 8px),
+            calc((100dvh - var(--altura-barra) - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 8px - 12px) * 5 / 3 + 12px)
+        );
+        max-width: none;
+        margin: auto;
+    }
+
+    #play-screen #game-canvas {
+        max-width: none;
+    }
+
+    /* Pausa e resultado cobrem a tela inteira. */
+    #play-screen .match-overlay {
+        position: fixed;
+        padding:
+            max(12px, env(safe-area-inset-top))
+            max(12px, env(safe-area-inset-right))
+            max(12px, env(safe-area-inset-bottom))
+            max(12px, env(safe-area-inset-left));
+    }
+
+    /* Painéis recolhidos numa gaveta, aberta pelo botão PAINÉIS. */
+    #play-screen .match-panels {
+        display: none;
+    }
+
+    body.paineis-abertos #play-screen .match-panels {
+        display: block;
+        position: fixed;
+        z-index: 45;
+        top: calc(env(safe-area-inset-top) + var(--altura-barra) + 8px);
+        right: max(8px, env(safe-area-inset-right));
+        bottom: max(8px, env(safe-area-inset-bottom));
+        left: max(8px, env(safe-area-inset-left));
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        touch-action: pan-y;
+        padding: 12px;
+        background: var(--panel);
+        border: 6px solid #0b0d1b;
+        box-shadow: 6px 6px 0 #090b16;
+    }
+
+    #play-screen .panels-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 4px solid var(--pink);
+    }
+
+    #play-screen .panels-header strong {
+        color: var(--blue);
+        font-size: 20px;
+        text-shadow: 3px 3px 0 #15182d;
+    }
+
+    #play-screen .match-panels .test-toolbar {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    #play-screen .match-panels .opponents-panel,
+    #play-screen .match-panels #task-list {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    }
+
+    /* Controles por cima das laterais do mapa. */
+    body.em-partida .touch-controls {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 40;
+        pointer-events: none;
+    }
+
+    body.paineis-abertos .touch-controls {
+        display: none;
+    }
+}
+
+/* Partes comuns do direcional e do botão E (só visíveis no bloco acima). */
+.dpad,
+.touch-action-button {
+    position: absolute;
+    bottom: max(12px, calc(env(safe-area-inset-bottom) + 8px));
+    pointer-events: auto;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
+
+/* Direcional em cruz, 3x3 quadrados de 46px, com sombra sólida. */
+.dpad {
+    left: max(12px, calc(env(safe-area-inset-left) + 8px));
+    display: grid;
+    grid-template-columns: repeat(3, 46px);
+    grid-template-rows: repeat(3, 46px);
+    opacity: 0.9;
+    filter: drop-shadow(4px 4px 0 #090b16);
+}
+
+.dpad-arm,
+.dpad-center {
+    display: grid;
+    place-items: center;
+    background: #404a78;
+    border: 4px solid #0b0d1b;
+    color: var(--yellow);
+    font-size: 18px;
+    line-height: 1;
+}
+
+.dpad-up { grid-area: 1 / 2; border-bottom: 0; }
+.dpad-left { grid-area: 2 / 1; border-right: 0; }
+.dpad-center { grid-area: 2 / 2; border: 0; background: #343d68; }
+.dpad-right { grid-area: 2 / 3; border-left: 0; }
+.dpad-down { grid-area: 3 / 2; border-top: 0; }
+
+.dpad-up::after { content: "▲"; }
+.dpad-left::after { content: "◀"; }
+.dpad-right::after { content: "▶"; }
+.dpad-down::after { content: "▼"; }
+
+.dpad-arm.pressionado {
+    background: var(--pink);
+    color: #171a31;
+}
+
+/* Botão E grande no canto inferior direito. */
+.touch-action-button {
+    right: max(12px, calc(env(safe-area-inset-right) + 8px));
+    width: 84px;
+    height: 84px;
+    border: 4px solid #0b0d1b;
+    background: var(--pink);
+    color: #171a31;
+    box-shadow: 5px 5px 0 #090b16;
+    font-family: "Courier New", monospace;
+    font-size: 40px;
+    font-weight: bold;
+    opacity: 0.92;
+}
+
+.touch-action-button.pressionado {
+    transform: translate(3px, 3px);
+    box-shadow: 2px 2px 0 #090b16;
+    background: var(--yellow);
+}
+
+/* ---------- Partida com o celular em pé: pede para girar ---------- */
+@media (pointer: coarse) and (orientation: portrait) {
+    body.em-partida {
+        overflow: hidden;
+    }
+
+    body.em-partida .rotate-notice {
+        display: flex;
+        position: fixed;
+        inset: 0;
+        z-index: 70;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        padding:
+            max(24px, env(safe-area-inset-top))
+            max(24px, env(safe-area-inset-right))
+            max(24px, env(safe-area-inset-bottom))
+            max(24px, env(safe-area-inset-left));
+        background:
+            linear-gradient(rgba(98, 201, 223, 0.06) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(98, 201, 223, 0.06) 1px, transparent 1px),
+            var(--night);
+        background-size: 32px 32px;
+        text-align: center;
+        touch-action: none;
+    }
+
+    .rotate-notice strong {
+        color: var(--yellow);
+        font-size: 26px;
+        text-shadow: 3px 3px 0 #15182d;
+    }
+
+    .rotate-notice p {
+        max-width: 260px;
+        margin: 0;
+        color: var(--gray);
+        line-height: 1.4;
+    }
+}
+
+/* Celular desenhado com blocos; gira em "saltos" (steps), como pixel art. */
+.rotate-phone {
+    position: relative;
+    width: 64px;
+    height: 104px;
+    margin-bottom: 12px;
+    background: var(--blue);
+    border: 6px solid #0b0d1b;
+    box-shadow: 6px 6px 0 #090b16;
+    animation: girarCelular 2.4s steps(1) infinite;
+}
+
+.rotate-phone span {
+    position: absolute;
+    inset: 6px 4px 14px;
+    background: var(--panel);
+}
+
+@keyframes girarCelular {
+    0%, 45% { transform: rotate(0deg); }
+    50%, 95% { transform: rotate(90deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .rotate-phone {
+        animation: none;
+        transform: rotate(90deg);
+    }
 }

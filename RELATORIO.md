@@ -1,6 +1,6 @@
 # Relatório de revisão — Laboratory Chaos
 
-Revisão completa do projeto feita em 20/11/2026, a partir do `CLAUDE.md` e do `SPEC.md`.
+Revisão completa do projeto feita em 20/11/2026, a partir do `CLAUDE.md` e do `SPEC.md`. Depois da revisão foram implementadas melhorias da seção 3: o destaque do E, as plaquinhas de nome e o **jogo no celular** (ver "Melhorias implementadas depois da revisão").
 
 **Como foi verificado**
 
@@ -10,6 +10,16 @@ Revisão completa do projeto feita em 20/11/2026, a partir do `CLAUDE.md` e do `
 - Teste no navegador (Chrome headless): modo solo abrindo o `index.html` direto e uma partida multiplayer com 3 abas no servidor local. **34 verificações, todas aprovadas, nenhum erro de JavaScript.**
 - Capturas de tela de todas as telas em **360px, 700px e 1280px**, medindo se algo passa da largura da tela.
 - Uma busca (BFS) com o mapa real calculou todas as posições onde o personagem consegue ficar e conferiu se cada tarefa e cada coletável pode ser acionado com **E**.
+- **Celular** (emulação de dispositivo móvel com toque no Chrome, Pointer Events reais): **360×640, 390×844 e 412×915, em retrato e paisagem**, e **1280×800** sem toque. Mais de 100 verificações, todas aprovadas, sem erros de JavaScript:
+  - menus em todas as orientações sem rolagem lateral, nada passando da tela e alvos de toque com pelo menos 44px;
+  - em paisagem: canvas inteiro na tela em 5:3, ocupando pelo menos 75% da altura, página da partida sem rolagem, `touch-action: none`;
+  - direcional: o braço acende ao segurar, a diagonal funciona ao arrastar o dedo, soltar para o boneco e o boneco anda;
+  - botão E abre a tarefa, com o modal cabendo na tela e opções de pelo menos 44px;
+  - gaveta PAINÉIS dentro da tela, com personagem/velocidade, e controles escondidos enquanto ela está aberta;
+  - Ⅱ da barra pausa, com a janela de pausa cabendo na tela;
+  - em retrato: aviso "GIRE O CELULAR" e nenhum controle;
+  - no computador: nenhum elemento de toque, ajuda de teclado visível, botão TELA CHEIA;
+  - **multiplayer**: um celular emulado entra na sala digitando o código e apertando Enter, joga com dois computadores, e o movimento pelo direcional aparece na tela do computador.
 - Busca por caminhos absolutos (`src="/…"`, `href="/…"`, `url(/…)`): **nenhum encontrado**.
 
 ---
@@ -65,20 +75,52 @@ Revisão completa do projeto feita em 20/11/2026, a partir do `CLAUDE.md` e do `
 
 17. O `config.js` agora reconhece o **Live Server do VS Code** (porta 5500) e procura o servidor na porta 3000 do mesmo computador. O CORS do servidor já previa esse caso, mas antes o cliente sempre mostrava "offline".
 
+### Melhorias implementadas depois da revisão
+
+18. **Destaque do que o E vai acionar.** Quando o jogador está ao alcance de uma tarefa ou de um coletável, o alvo ganha um contorno quadrado piscando: alterna amarelo (`--yellow`) e rosa (`--pink`) a cada 250ms, com borda preta por fora, no estilo pixel art do mapa. O destaque usa **a mesma regra do E** (o mais próximo, na mesma sala), na função `alvoDaInteracao()`, então mostra exatamente o que será acionado. Ele é desenhado por cima dos bonecos, porque a marca pode ficar sob o personagem. Some com o jogo pausado, encerrado, com um minijogo aberto e durante o apagão, para o evento continuar atrapalhando.
+19. **Plaquinhas de nome sem sobreposição.** `organizarPlaquinhas()` coloca primeiro a plaquinha de quem está mais embaixo no mapa; as outras sobem de 14 em 14px (ou descem, se não couberem no topo do mapa) até achar um espaço livre. Um tracinho escuro liga a plaquinha deslocada à cabeça do boneco. As plaquinhas agora são desenhadas por cima de todos os bonecos. Testado com 5 jogadores lado a lado no ponto de saída, que antes ficavam com os 4 nomes um em cima do outro.
+
+### Jogo no celular
+
+20. **Controles de toque** (só em telas de toque, detectadas por `(pointer: coarse)`; nunca no computador):
+    - **Direcional em pixel art** no canto inferior esquerdo. Funciona como joystick: a direção vem da posição do dedo em relação ao centro, em 8 setores (com diagonais). O dedo pode ficar pressionado e escorregar, graças à captura do ponteiro (`setPointerCapture`). O braço pressionado fica rosa.
+    - **Botão E** grande no canto inferior direito.
+    - Os dois usam **Pointer Events** e só "apertam" as setas no mesmo `teclasPressionadas` do teclado e chamam a mesma `interagir()` da tecla E: a lógica de movimento é a mesma, sem duplicação.
+    - Durante os testes apareceu um "clique fantasma": o toque no E abria o minijogo e o clique gerado pelo navegador caía no botão FECHAR, que surge sob o dedo. Isso foi resolvido cancelando o `touchstart` nos controles.
+21. **Partida com o celular deitado:**
+    - Barra fina no topo com relógio, jogadores ativos, um resumo numa linha (tarefas e o evento ou aviso do momento, como "Frasco coletado (1/3)") e os botões ☰ PAINÉIS, Ⅱ (pausa, só para quem pode pausar) e ⛶ (tela cheia).
+    - O canvas ocupa o máximo do espaço restante em 5:3, calculado com `100dvh` e `env(safe-area-inset-*)`, e os controles ficam por cima das laterais.
+    - Adversários, evento, tarefas, personagem/velocidade e "voltar ao menu" ficam numa **gaveta** com rolagem própria.
+22. **Celular em pé:** na tela da partida aparece o aviso "GIRE O CELULAR", com um celular em pixel art que gira em saltos. Os menus continuam funcionando em retrato.
+23. **Página estável:**
+    - `viewport-fit=cover` na meta viewport.
+    - Na partida: página fixa, `overflow: hidden`, `overscroll-behavior: none`, `touch-action: none` e sem seleção de texto.
+    - Nos controles: sem menu de toque longo (`-webkit-touch-callout`, `contextmenu`).
+    - `touch-action: manipulation` nos botões, para o toque duplo não dar zoom.
+    - Áreas seguras (notch) respeitadas em todas as telas.
+24. **Menus e salas:**
+    - Botões, listas, sliders e campos de toque com pelo menos 44px. O ENTRAR das salas públicas tinha 36px.
+    - Fonte de 16px nos campos, para o iPhone não dar zoom ao tocar.
+    - O campo de código fica **ao lado** do ENTRAR, se centraliza quando o teclado abre e entra na sala com a tecla Enter/Ir do teclado do celular.
+25. **Tela cheia** (Fullscreen API, com o prefixo `webkit` como alternativa): tenta travar a tela deitada. O botão some quando o navegador não suporta, como no iPhone. No computador aparece como "⛶ TELA CHEIA".
+26. **Plaquinhas de nome legíveis no celular:** a letra acompanha a escala do canvas (11px na tela, até 18px do canvas).
+27. **Multiplayer no celular** funciona igual, porque o toque gera as mesmas "teclas" e a posição sai pelo mesmo `enviarPosicao()`. O servidor não mudou.
+
 O `server/index.js` **não precisou de mudanças**: as regras que ele repete continuam iguais às do cliente. `SPEC.md` e `CLAUDE.md` foram atualizados com as mudanças acima.
 
 ---
 
 ## 3. O que ainda precisa melhorar
 
-- **Celular**: não há controles de toque. A interface cabe na tela, mas não dá para andar.
+- **Celular — testar em aparelhos reais**: tudo foi testado com emulação do Chrome. Falta conferir num iPhone (Safari, sem tela cheia) e num Android de verdade, principalmente o notch, a barra do navegador e o multitoque (andar e apertar E ao mesmo tempo).
+- **Celular — retrato**: a partida só funciona deitada. Um layout em pé exigiria outro desenho de tela, porque o mapa é largo (5:3).
+- **Celular — controles fixos**: o tamanho e a posição do direcional e do E não podem ser ajustados, e não há vibração ao tocar.
 - **Reconexão**: no multiplayer, recarregar a página ou perder a conexão tira o jogador da partida.
 - **Segurança do multiplayer**: o servidor não confere os cliques dos minijogos, a distância das coletas nem a velocidade e as paredes no movimento. Um cliente modificado poderia trapacear.
 - **Render gratuito**: o servidor "dorme" sem uso. A primeira conexão pode passar de 15s e mostrar "offline" antes de conectar sozinha.
-- **Indicação de alcance**: não há destaque visual mostrando o que o E vai acionar; seria bom acender a marca ou o objeto mais próximo.
-- **Plaquinhas de nome** se sobrepõem quando dois jogadores ficam muito próximos.
 - **Assets**: a pasta `assets/` está vazia; sprites e sons são gerados por código.
-- **Testes automáticos do cliente**: o `npm test` cobre só o servidor. O teste no navegador desta revisão foi feito à parte e não está no repositório.
+- **Plaquinhas com muitos jogadores amontoados**: com 5 jogadores no mesmo ponto, uma plaquinha deslocada pode ficar longe da cabeça do seu boneco; o tracinho ajuda, mas a leitura fica menos imediata.
+- **Testes automáticos do cliente**: o `npm test` cobre só o servidor. Os testes no navegador desta revisão (computador e celular com toque emulado) foram feitos à parte, com Puppeteer, e não estão no repositório. Vale a pena incluí-los numa pasta de testes.
 
 ---
 
@@ -115,7 +157,7 @@ URL_TESTE=https://laboratory-chaos.onrender.com npm test   # testa o servidor on
 
 ### Solo
 1. Abra o jogo e clique em **JOGAR**. O cronômetro começa em 05:00, o HUD mostra 4 jogadores ativos e há 3 adversários no painel.
-2. Ande com **W A S D** ou com as setas, inclusive na diagonal, e encoste numa parede para ver que o personagem desliza.
+2. Ande com **W A S D** ou com as setas, inclusive na diagonal, e encoste numa parede para ver que o personagem desliza. Ao chegar perto de uma marca ou de um objeto, ele ganha um contorno piscando amarelo e rosa: é isso que o E vai acionar.
 3. Na sala Principal (centro), aperte **E** perto da marca amarela à direita para abrir **Ativar o protocolo** e clique em CONFIRMAR: deve aparecer "Faltam 3 cartões". Feche.
 4. **Coleta** (aperte E perto de cada objeto; o aviso mostra "Frasco coletado (1/3)" etc.):
    - Frascos (rosa): sala de Computadores (embaixo, à esquerda), sala Principal (em cima do armário roxo da esquerda; pegue pelo lado direito do armário) e sala de Segurança (embaixo, à esquerda).
@@ -136,11 +178,20 @@ URL_TESTE=https://laboratory-chaos.onrender.com npm test   # testa o servidor on
    - **Alarme**: o painel pisca e toca um bip. Com o alarme ativo, volte ao menu: o bip deve parar.
 9. **Derrota**: deixe o tempo correr sem fazer tarefas. Um adversário costuma chegar a 6/6 antes de acabar o tempo; se ninguém chegar, ao fim do tempo vence quem tiver mais tarefas.
 
-### Multiplayer (3 jogadores; dá para usar 3 abas no mesmo computador)
+### No celular
+1. Abra o jogo no celular (GitHub Pages ou o endereço `http://IP:3000` da rede da escola) e toque em **JOGAR** com o celular em pé: deve aparecer "GIRE O CELULAR".
+2. Deite o celular: o mapa ocupa a tela, com o direcional à esquerda e o **E** à direita. Não deve dar para rolar a página nem dar zoom.
+3. Segure o direcional e arraste o dedo para as diagonais: o boneco anda e o braço apertado fica rosa. Solte: ele para.
+4. Perto do painel central, toque em **E**: abre "Ativar o protocolo". Toque em CONFIRMAR e em FECHAR.
+5. Toque em **☰ PAINÉIS**: aparecem adversários, evento, tarefas, personagem e velocidade. Feche a gaveta.
+6. Toque em **Ⅱ** para pausar e em CONTINUAR. Toque em **⛶** para tela cheia (no Android; no iPhone o botão não aparece).
+7. Em SALAS, toque no campo de código: o teclado abre e o botão ENTRAR continua visível ao lado. Digite o código e use a tecla "Ir" do teclado.
+
+### Multiplayer (3 jogadores; dá para usar 3 abas no mesmo computador ou celulares)
 1. Rode `npm start` (ou use o GitHub Pages) e abra o jogo em 3 abas ou computadores. Em **SALAS**, deve aparecer "SERVIDOR ONLINE".
 2. Aba A: **Criar sala privada** e anote o código (ex.: `LABXYZ`). Abas B e C: digite o código, em minúsculas também funciona, e clique em **ENTRAR**.
 3. No lobby, troque de personagem: o personagem de outro jogador fica indisponível. Com 2 jogadores, INICIAR PARTIDA fica desativado; só o anfitrião (A) pode iniciar com 3.
-4. A inicia: as 3 abas vão para a partida com o mesmo cronômetro. Ande em uma aba e veja o boneco se mexer nas outras, com o nome em cima.
+4. A inicia: as 3 abas vão para a partida com o mesmo cronômetro. No ponto de saída os nomes dos outros aparecem empilhados, sem se sobrepor. Ande em uma aba e veja o boneco se mexer nas outras, com o nome em cima.
 5. Conclua uma tarefa em B. O painel de A e C mostra o progresso de B (1/6).
 6. Em B, sem cartões, abra o Protocolo e clique em CONFIRMAR: o servidor recusa ("Colete os 3 cartões primeiro").
 7. Em A, clique em PAUSAR: as 3 abas pausam, e B e C não veem o botão CONTINUAR. Quando A continua, o jogo volta para todos.

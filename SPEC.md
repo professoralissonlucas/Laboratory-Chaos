@@ -25,7 +25,7 @@ rafisa/                 # raiz = publicada pelo GitHub Pages
 ├── index.html          # Estrutura de todas as telas
 ├── style.css           # Visual pixel art e layout responsivo
 ├── config.js           # URL do servidor multiplayer
-├── script.js           # Toda a lógica do cliente (8 seções comentadas)
+├── script.js           # Toda a lógica do cliente (9 seções comentadas)
 ├── assets/             # images/ e sounds/ vazios (reservados)
 ├── server/
 │   ├── package.json    # "npm start" e "npm test"; dependências: express, socket.io
@@ -58,7 +58,7 @@ Cada tela é um `<main class="screen">`; apenas a que tem a classe `active` é e
 | ID da tela | Nome | Conteúdo |
 |---|---|---|
 | `menu-screen` | Menu principal | Título e 5 botões: Jogar, Como Jogar, Configurações, Créditos, Salas |
-| `play-screen` | Partida (título "PARTIDA") | Seletor de personagem, slider de velocidade (com valor), canvas 800×480 dentro de `.canvas-frame`, HUD, painel de adversários, ajuda de teclado, painel de evento, botão "Testar evento aleatório", progresso de tarefas, modal de tarefa, botões Pausar e Voltar |
+| `play-screen` | Partida (título "PARTIDA"). Em telas de toque: barra no topo, gaveta de painéis, direcional e botão E (paisagem) ou aviso "GIRE O CELULAR" (retrato) | Seletor de personagem, slider de velocidade (com valor), canvas 800×480 dentro de `.canvas-frame`, HUD, painel de adversários, ajuda de teclado, painel de evento, botão "Testar evento aleatório", progresso de tarefas, modal de tarefa, botões Pausar e Voltar |
 | `how-screen` | Como jogar | Objetivo, controles, tecla E, coletáveis, eventos e limite de 5 minutos |
 | `settings-screen` | Configurações | Volume (0–100%) e efeitos sonoros — ambos afetam o bip do alarme |
 | `credits-screen` | Créditos | Texto sobre o projeto |
@@ -76,14 +76,22 @@ Elementos sobrepostos (atributo `hidden`):
 - Fonte única: `"Courier New", monospace`.
 - Estética pixel art: bordas pretas grossas (`#0b0d1b`), sombras sólidas deslocadas, `image-rendering: pixelated`, sem bordas arredondadas.
 - Canvas: resolução lógica 800×480, escalado só pelo CSS (`aspect-ratio: 5 / 3`).
-- **Responsivo**: breakpoint `@media (max-width: 700px)` — menos espaço interno, HUD em 2 colunas, painéis empilhados; os overlays de pausa/resultado passam a cobrir a tela inteira (`position: fixed`), porque o canvas fica pequeno demais. Testado em 360, 700 e 1280px sem rolagem horizontal.
+- **Responsivo**: breakpoint `@media (max-width: 700px)` — menos espaço interno, HUD em 2 colunas, painéis empilhados; os overlays de pausa/resultado passam a cobrir a tela inteira (`position: fixed`), porque o canvas fica pequeno demais. Testado em 360, 700 e 1280px sem rolagem horizontal. Telas de toque têm regras próprias (ver 4.1).
 - Botões desativados (`:disabled`) ficam com 50% de opacidade.
 
 ---
 
+### 4.1 Celular (telas de toque)
+- Tudo que é de toque fica no fim do `style.css` ("CELULAR E TOQUE") e só vale em `@media (pointer: coarse)`; no computador `.touch-bar`, `.panels-header`, `.touch-controls` e `.rotate-notice` ficam escondidos.
+- Meta viewport com `viewport-fit=cover`; `.screen` usa `100dvh` e `env(safe-area-inset-*)`. Botões com `touch-action: manipulation`.
+- `abrirTela()` marca `body.em-partida` na tela da partida; a gaveta usa `body.paineis-abertos`.
+- **Paisagem**: `#play-screen` fica fixo (sem rolagem, `touch-action: none`, sem seleção). O `.match-hud` vira uma barra de 56px no topo com `.touch-bar` (resumo `#touch-summary`, ☰ PAINÉIS, Ⅱ `#touch-pause-button`, ⛶). O `.canvas-frame` tem a maior largura que cabe em 5:3 abaixo da barra. `#match-panels` (adversários, ajuda, evento, testar evento, tarefas e botões) vira uma gaveta fixa com rolagem; a barra `#match-toolbar` (personagem/velocidade) é levada para dentro dela pelo `organizarLayoutToque()`. Overlays de pausa/resultado ficam fixos na tela toda.
+- **Retrato**: `.rotate-notice` cobre a tela da partida (z-index 70).
+- Alvos de toque com no mínimo 44px; campos com fonte de 16px (evita o zoom do iPhone); o código da sala fica ao lado do ENTRAR.
+
 ## 5. Lógica do cliente (script.js)
 
-Seções: 1. Navegação e configurações · 2. Personagem · 3. Mapa · 4. Eventos · 5. Tarefas · 6. Partida · 7. Salas · 8. Loop principal e inicialização.
+Seções: 1. Navegação e configurações · 2. Personagem · 3. Mapa · 4. Eventos · 5. Tarefas · 6. Partida · 7. Salas · 8. Celular · 9. Loop principal e inicialização.
 
 ### 5.1 Navegação
 - `abrirTela(id)` troca a classe `active`.
@@ -133,6 +141,7 @@ Salas: Computadores, Principal, Energia, Segurança e Reator (porta do **Reator 
 | `protocolo` | Ativar o protocolo | Coletar 3 cartões e CONFIRMAR |
 
 - Tecla **E**: considera as tarefas a até 100px e os frascos/cartões a até 70px do **centro** do personagem, **só na mesma sala** (`salaDoPonto`), e aciona o **mais próximo**. Assim nenhum coletável fica escondido por uma tarefa vizinha, e o Reator só pode ser usado de dentro da sala (porta aberta).
+- **Destaque**: `alvoDaInteracao()` escolhe o alvo (a mesma função usada pelo E) e `desenharDestaqueInteracao()` desenha um contorno de 3px piscando entre `--yellow` e `--pink` a cada 250ms, com borda preta, por cima dos bonecos. Não aparece com o jogo pausado/encerrado, com o modal aberto ou durante o apagão.
 - Coletáveis — frascos: (96,144), (336,360), (600,160); cartões: (128,420), (720,112), (720,384).
 - Erros piscam o botão com `.wrong`; CONFIRMAR fica `.selected` com os 3 cartões; ao reabrir, passos já feitos aparecem verdes.
 - Multiplayer: `concluirTarefa()` pede validação ao servidor; só `tarefa:confirmada` chama `marcarTarefaConcluida()`. Em `tarefa:recusada`, o minijogo volta ao começo (e é redesenhado se estiver aberto).
@@ -150,8 +159,18 @@ Salas: Computadores, Principal, Energia, Segurança e Reator (porta do **Reator 
 - Cada personagem (0–4) nasce num ponto da sala principal: `posicaoDeSaida(i)` = `{ x: 296 + 40·i, y: 288 }`.
 - `enviarPosicao()` manda `{ x, y, direcao, andando }` a cada 66ms (~15x/s), só quando algo mudou, sem enviar com o jogo pausado ou encerrado (`volatile`: mensagens velhas são descartadas).
 - `outrosJogadores` guarda as últimas 10 posições recebidas de cada um. `atualizarOutrosJogadores()` desenha cada um **100ms no passado**, interpolando entre as duas posições ao redor desse momento (fica parado na última se não chegar nada novo).
-- `desenharBoneco()` desenha qualquer jogador com o personagem escolhido; `desenharNome()` põe uma plaquinha escura com o nome acima da cabeça. O próprio personagem é desenhado por último (fica por cima) e sem plaquinha.
+- `desenharBoneco()` desenha qualquer jogador com o personagem escolhido; `desenharNome()` põe uma plaquinha escura com o nome acima da cabeça. O próprio personagem é desenhado depois dos outros e sem plaquinha; as plaquinhas vêm por último, por cima de todos.
+- `organizarPlaquinhas()` evita plaquinhas sobrepostas: a de quem está mais embaixo fica no lugar; as outras sobem de 14 em 14px (ou descem, perto do topo) até achar espaço, com um tracinho ligando à cabeça.
 - Outros jogadores não colidem entre si nem com o jogador.
+
+### 5.8.1 Celular (seção 8 do script.js)
+- **Direcional** (`#dpad`): Pointer Events com `setPointerCapture`; `aplicarDirecional()` converte a posição do dedo em 8 setores e liga `teclasPressionadas.arrowup/down/left/right` (o mesmo objeto do teclado). `pointerup`/`pointercancel`/`lostpointercapture` soltam.
+- **Botão E** (`#touch-e-button`): `pointerdown` chama `interagir()`, a mesma função da tecla E. O `touchstart` dos controles é cancelado para evitar o clique fantasma no modal recém-aberto.
+- `soltarTeclas()` também apaga o direcional; é chamada ao girar o aparelho, ao abrir a gaveta, ao pausar e no `blur`.
+- `#touch-summary` é atualizado por um `MutationObserver` que observa `#event-name`, `#event-message` e `#tasks-completed`.
+- Tela cheia: `alternarTelaCheia()` (com prefixo `webkit` como alternativa) e `screen.orientation.lock("landscape")` quando possível; os botões `.fullscreen-button` ficam `hidden` se não houver suporte.
+- Plaquinhas de nome: `tamanhoFonteNome()` aumenta a letra conforme o canvas é reduzido na tela (11px na tela; 11 a 18px do canvas).
+- Código da sala: Enter/"Ir" do teclado entra; ao focar, o painel é centralizado.
 
 ### 5.9 Salas (cliente)
 Objeto `rede` (socket, online, meuId, sala, publicas) e `salasRede` (criar, entrar, sair, trocarPersonagem, iniciar). `conectarServidor()` registra todos os `socket.on`. O lobby mostra jogadores, anfitrião, "VOCÊ", personagens ocupados e só libera INICIAR PARTIDA para o anfitrião com 3+ jogadores.
@@ -200,13 +219,12 @@ Sobe o servidor numa porta livre e simula de 3 a 6 jogadores (37 verificações)
 
 ## 8. Limitações conhecidas
 
-1. Sem controles de toque: no celular a interface cabe na tela, mas não dá para andar.
+1. Celular: a partida só é jogável com o aparelho deitado; testado só em emulação (falta conferir em aparelhos reais).
 2. Multiplayer: sem reconexão (recarregar a página = sair da partida).
 3. Multiplayer: o servidor não valida os cliques dos minijogos nem a distância das coletas; a posição só é limitada ao mapa (não confere paredes nem velocidade, então um cliente modificado poderia "teleportar").
 4. Pasta `assets/` vazia; sprites e sons são gerados por código.
 5. Render gratuito "dorme" sem uso: a primeira conexão pode passar dos 15s e mostrar "offline" antes de conectar sozinho.
-6. Multiplayer: as plaquinhas de nome se sobrepõem quando dois jogadores ficam muito próximos.
-7. A tecla E não tem indicação visual de alcance (o jogador descobre pela mensagem de aviso).
+6. Multiplayer: com muitos jogadores amontoados, uma plaquinha deslocada pode ficar longe da cabeça do seu boneco (o tracinho indica de quem é).
 
 ---
 

@@ -2,7 +2,10 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- viewport-fit=cover: a página usa a tela toda e o CSS desvia do notch
+         com env(safe-area-inset-*). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#13172b">
     <title>Laboratory Chaos</title>
 
     <!-- Importa o arquivo de estilos da página. -->
@@ -62,7 +65,8 @@
         <section class="game-window content-window play-window">
             <h2>PARTIDA</h2>
 
-            <div class="test-toolbar">
+            <!-- No celular esta barra é levada para dentro da gaveta de painéis (script.js). -->
+            <div class="test-toolbar" id="match-toolbar">
                 <label for="character-select">
                     Personagem
                     <select id="character-select">
@@ -119,6 +123,21 @@
                     <span class="hud-label">JOGADORES ATIVOS</span>
                     <strong id="active-players">4</strong>
                 </div>
+                <!-- Só no celular: resumo numa linha e botões da barra do topo. -->
+                <div class="touch-bar">
+                    <span class="touch-summary" id="touch-summary" aria-live="polite">TAREFAS 0/6</span>
+                    <button class="touch-bar-button" id="panels-button" type="button" aria-expanded="false" aria-controls="match-panels">☰ PAINÉIS</button>
+                    <button class="touch-bar-button" id="touch-pause-button" type="button" aria-label="Pausar">Ⅱ</button>
+                    <button class="touch-bar-button fullscreen-button" type="button" aria-label="Tela cheia">⛶</button>
+                </div>
+            </div>
+
+            <!-- Painéis da partida. No computador aparecem normalmente abaixo do HUD;
+                 no celular viram uma gaveta aberta pelo botão PAINÉIS. -->
+            <div class="match-panels" id="match-panels">
+            <div class="panels-header">
+                <strong>PAINÉIS</strong>
+                <button class="back-button" id="panels-close" type="button">FECHAR</button>
             </div>
 
             <div class="opponents-panel" id="opponents-panel"></div>
@@ -144,6 +163,34 @@
                 <div id="task-list"></div>
             </div>
 
+            <div class="match-buttons">
+                <button class="back-button" id="pause-button" type="button">Ⅱ PAUSAR</button>
+                <!-- Escondido pelo script.js se o navegador não tiver tela cheia (ex.: iPhone). -->
+                <button class="back-button fullscreen-button" type="button">⛶ TELA CHEIA</button>
+                <button class="back-button" data-screen="menu-screen">← VOLTAR AO MENU</button>
+            </div>
+            </div>
+
+            <!-- Controles de toque: só aparecem em telas de toque, com o celular deitado. -->
+            <div class="touch-controls" aria-hidden="true">
+                <div class="dpad" id="dpad">
+                    <span class="dpad-arm dpad-up" data-direcao="cima"></span>
+                    <span class="dpad-arm dpad-left" data-direcao="esquerda"></span>
+                    <span class="dpad-center"></span>
+                    <span class="dpad-arm dpad-right" data-direcao="direita"></span>
+                    <span class="dpad-arm dpad-down" data-direcao="baixo"></span>
+                </div>
+                <button class="touch-action-button" id="touch-e-button" type="button">E</button>
+            </div>
+
+            <!-- Aviso do modo retrato em telas de toque. -->
+            <div class="rotate-notice" role="alert">
+                <div class="rotate-phone" aria-hidden="true"><span></span></div>
+                <strong>GIRE O CELULAR</strong>
+                <p>A partida é jogada com o celular deitado.</p>
+                <button class="back-button" data-screen="menu-screen">← VOLTAR AO MENU</button>
+            </div>
+
             <div class="task-modal" id="task-modal" hidden>
                 <section class="task-modal-window">
                     <header>
@@ -158,9 +205,6 @@
                     </div>
                 </section>
             </div>
-
-            <button class="back-button" id="pause-button" type="button">Ⅱ PAUSAR</button>
-            <button class="back-button" data-screen="menu-screen">← VOLTAR AO MENU</button>
         </section>
     </main>
 
@@ -173,6 +217,7 @@
                 <p>Conclua as 6 tarefas do laboratório antes dos adversários. Você tem 5 minutos!</p>
                 <ul>
                     <li>Ande com <strong>W A S D</strong> ou com as <strong>setas</strong>.</li>
+                    <li>No celular, deite o aparelho: use o <strong>direcional</strong> à esquerda e o botão <strong>E</strong> à direita.</li>
                     <li>Pare perto de uma marca amarela e aperte <strong>E</strong> para abrir a tarefa.</li>
                     <li>Aperte <strong>E</strong> perto de frascos e cartões para coletá-los: a tarefa dos frascos precisa de 3 frascos e o protocolo precisa de 3 cartões.</li>
                     <li>A porta do Reator começa trancada: conclua "Desbloquear as portas" para entrar.</li>
@@ -235,7 +280,8 @@
             <section class="join-panel">
                 <h3>Entrar com código</h3>
                 <div class="join-row">
-                    <input id="room-code-input" type="text" maxlength="6" placeholder="EX.: LAB123" aria-label="Código da sala">
+                    <input id="room-code-input" type="text" maxlength="6" placeholder="EX.: LAB123" aria-label="Código da sala"
+                        autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
                     <button class="back-button" id="join-room-button" type="button">ENTRAR</button>
                 </div>
                 <p id="room-feedback" role="status"></p>

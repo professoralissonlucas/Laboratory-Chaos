@@ -27,7 +27,7 @@ Há dois modos:
 ```
 rafisa/                  # raiz = o que o GitHub Pages publica
 ├── index.html           # Todas as telas (<main class="screen">) e overlays
-├── style.css            # Visual pixel art, paleta no :root, breakpoint único de 700px
+├── style.css            # Visual pixel art, paleta no :root, breakpoint de 700px + bloco de toque (pointer: coarse)
 ├── config.js            # URL do servidor multiplayer (carregado antes do script.js)
 ├── script.js            # Toda a lógica do cliente, dentro de um único DOMContentLoaded
 ├── assets/              # images/ e sounds/ vazios (reservados)
@@ -46,13 +46,14 @@ O servidor nunca entrega `server/` nem arquivos/pastas começando com ponto (com
 Seções do `script.js` (cada uma com comentário de cabeçalho):
 
 1. Navegação e configurações — `abrirTela(id)`, botões `data-screen`, volume/efeitos.
-2. Personagem — `personagem`, `posicaoDeSaida()`, `escolherPersonagem()`, `aplicarVelocidade()`, `desenharBoneco()` (qualquer jogador), `desenharNome()`, `atualizarPersonagem(delta)`.
+2. Personagem — `personagem`, `posicaoDeSaida()`, `escolherPersonagem()`, `aplicarVelocidade()`, `desenharBoneco()` (qualquer jogador), `desenharNome()`/`organizarPlaquinhas()` (nomes sem sobreposição), `atualizarPersonagem(delta)`.
 3. Mapa — `paredes`, `portas`, `obstaculos`, `caixaColisao()` (hitbox 28×28 nos pés), `checarColisao(soFixos)` (true se colide; usada por eixo em `atualizarPersonagem`), `salasDoMapa`/`salaDoPonto()` (interação só na mesma sala), `desenharFundo()`.
 4. Eventos — `eventosAleatorios`, `iniciarEvento()` (sorteio solo), `aplicarEvento(id, duração, portas)`, `finalizarEvento()`, `agendarProximoEvento()`.
-5. Tarefas — `tarefas`, `objetosColetaveis`, `interface<Tarefa>()`, `concluirTarefa()` (rede: pede validação), `marcarTarefaConcluida()`.
+5. Tarefas — `tarefas`, `objetosColetaveis`, `alvoDaInteracao()` (o que o E aciona; usado também por `desenharDestaqueInteracao()`), `interface<Tarefa>()`, `concluirTarefa()` (rede: pede validação), `marcarTarefaConcluida()`.
 6. Partida — `modoJogo` ("solo" | "rede"), `iniciarPartida(modo, dados)`, `atualizarPartida()` (só solo), `verificarResultado()`, `pausarPartida()`/`congelarPartida()`.
 7. Salas — objeto `rede`, `outrosJogadores` (posições recebidas + interpolação de 100ms em `atualizarOutrosJogadores()`), `enviarPosicao()` (~15x/s), `salasRede`, `exibirLobby()`, `conectarServidor()` (carrega o cliente Socket.IO) e `iniciarSocket()` (todos os `socket.on`).
-8. Loop principal e inicialização — `executarJogo(tempo)` via `requestAnimationFrame`.
+8. Celular — `organizarLayoutToque()`, gaveta (`abrirPaineis()`), `atualizarResumoToque()`, direcional (`aplicarDirecional()`), botão E (`interagir()`), `alternarTelaCheia()`.
+9. Loop principal e inicialização — `executarJogo(tempo)` via `requestAnimationFrame`.
 
 O `server/index.js` repete algumas regras do cliente (seção "REGRAS", ex.: tarefas, durações dos eventos, portas travadas). Ao mudar uma regra, mude nos dois arquivos.
 
@@ -64,6 +65,7 @@ O `server/index.js` repete algumas regras do cliente (seção "REGRAS", ex.: tar
 - **UI mostrada/ocultada com o atributo `hidden`** (modal de tarefa, overlays, lobby).
 - **Telas trocadas com a classe `active`** em `.screen` (via `abrirTela()`).
 - **Texto vindo de dados inserido com `textContent`**, nunca `innerHTML` com conteúdo variável.
+- **Celular**: estilos de toque só dentro de `@media (pointer: coarse)` (fim do `style.css`); controles de toque usam Pointer Events e alimentam `teclasPressionadas`/`interagir()`, nunca uma lógica de movimento própria.
 
 ## Regras permanentes
 
